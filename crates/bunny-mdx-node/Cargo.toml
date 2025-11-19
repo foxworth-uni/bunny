@@ -28,4 +28,4 @@ serde_json.workspace = true
 anyhow.workspace = true
 
 [build-dependencies]
-napi-build = "2.3.0"
+napi-build.workspace = true

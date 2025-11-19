@@ -81,6 +81,20 @@ rolldown_plugin = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-
 rolldown_common = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-beta.50" }
 rolldown_error = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-beta.50" }
 
+# Async utilities
+async-trait = "0.1"
+
+# NAPI build
+napi-build = "2.3.0"
+
+# WASM ecosystem
+wasm-bindgen = "0.2.95"
+serde-wasm-bindgen = "0.6"
+js-sys = "0.3"
+console_error_panic_hook = "0.1.7"
+wee_alloc = "0.4.5"
+wasm-bindgen-test = "0.3.42"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

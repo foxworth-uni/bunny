@@ -189,7 +189,7 @@ name = "bunny"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bunny-mdx",
+ "bunny-mdx 0.1.0",
  "fob-bundler",
  "rolldown_common",
  "thiserror 2.0.17",
@@ -218,11 +218,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "bunny-mdx"
+version = "0.1.0"
+source = "git+https://github.com/foxworth-uni/bunny?branch=main#03d870a88a4510f33c225abe24dc1dfe9bbfc0d6"
+dependencies = [
+ "anyhow",
+ "markdown",
+ "oxc_allocator",
+ "oxc_parser",
+ "oxc_span",
+ "path-clean",
+ "regex",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.17",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "bunny-mdx-node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bunny-mdx",
+ "bunny-mdx 0.1.0",
  "napi",
  "napi-build",
  "napi-derive",
@@ -234,7 +255,7 @@ dependencies = [
 name = "bunny-wasm"
 version = "0.1.0"
 dependencies = [
- "bunny-mdx",
+ "bunny-mdx 0.1.0",
  "console_error_panic_hook",
  "js-sys",
  "serde",
@@ -637,7 +658,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bunny-mdx",
+ "bunny-mdx 0.1.0 (git+https://github.com/foxworth-uni/bunny?branch=main)",
  "fob-gen",
  "fob-plugin-mdx",
  "oxc_allocator",
@@ -707,7 +728,7 @@ name = "fob-plugin-mdx"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bunny-mdx",
+ "bunny-mdx 0.1.0 (git+https://github.com/foxworth-uni/bunny?branch=main)",
  "rolldown",
  "rolldown_common",
  "rolldown_plugin",
