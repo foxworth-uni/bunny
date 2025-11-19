@@ -1,0 +1,47 @@
+---
+title: Advanced Features
+description: Explore advanced features and patterns with bunny-next
+date: 2025-01-14
+author: Bunny Team
+tags: [advanced, features]
+---
+
+# Advanced Features
+
+## Frontmatter Parsing
+
+<Callout type="success">
+bunny-next automatically parses YAML frontmatter!
+</Callout>
+
+```typescript
+const mdxSource = await serialize(content, {
+  parseFrontmatter: true,
+});
+console.log(mdxSource.frontmatter);
+```
+
+## Scope Variables
+
+Pass dynamic data to your MDX:
+
+```typescript
+const mdxSource = await serialize(content, {
+  scope: { userName: 'Alice', count: 42 }
+});
+```
+
+<Counter initialCount={100} />
+
+## Cache Management
+
+```typescript
+import { configureMDXCache } from 'bunny-next';
+
+configureMDXCache({
+  maxSize: 1000,
+  ttl: 1000 * 60 * 30 // 30 minutes
+});
+```
+
+<Button variant="secondary">Learn More</Button>

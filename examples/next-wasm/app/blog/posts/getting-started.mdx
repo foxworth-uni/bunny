@@ -1,0 +1,54 @@
+---
+title: Getting Started with bunny-next
+description: Learn how to integrate bunny-next into your Next.js 16 project
+date: 2025-01-15
+author: Bunny Team
+tags: [tutorial, getting-started, mdx]
+---
+
+# Getting Started with bunny-next
+
+Welcome to **bunny-next**, the fastest way to add MDX support to your Next.js application!
+
+## Installation
+
+```bash
+npm install bunny-next @bunny/mdx-runtime
+```
+
+## Configuration
+
+```typescript
+import { withMDX } from 'bunny-next/config';
+
+export default withMDX({
+  mdxOptions: { gfm: true, footnotes: true }
+})(nextConfig);
+```
+
+<Callout type="info">
+bunny-next is powered by a Rust compiler for 10x faster compilation!
+</Callout>
+
+## Usage Modes
+
+### 1. Local MDX Files
+
+```typescript
+import Content from './content.mdx';
+export default function Page() {
+  return <Content />;
+}
+```
+
+### 2. Remote MDX
+
+<Counter initialCount={1} />
+
+```typescript
+import { serialize, MDXRemote } from 'bunny-next';
+const mdxSource = await serialize(content);
+return <MDXRemote {...mdxSource} />;
+```
+
+<Button variant="primary">Get Started</Button>

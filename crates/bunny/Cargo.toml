@@ -1,0 +1,29 @@
+[package]
+name = "bunny"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Runtime MDX compiler and bundler - compile+bundle MDX from CMS/database at request time"
+
+[dependencies]
+# Core Bunny MDX compiler
+bunny-mdx = { path = "../bunny-mdx" }
+
+# Fob bundler core - provides unified build API
+fob = { path = "../../../fob/crates/fob-bundler", package = "fob-bundler" }
+
+# Rolldown types (for accessing bundle output structure)
+rolldown_common.workspace = true
+
+# Error handling
+anyhow.workspace = true
+thiserror.workspace = true
+
+# Async runtime (required for fob-core bundling) - native targets only
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]

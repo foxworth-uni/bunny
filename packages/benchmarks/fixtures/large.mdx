@@ -1,0 +1,214 @@
+---
+title: Large Test Document
+description: Testing performance with large documents
+author: Performance Team
+---
+
+# Large Document Performance Test
+
+This document is designed to test performance with larger content files.
+
+## Section 1: Introduction
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+
+```javascript
+function factorial(n) {
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+}
+```
+
+## Section 2: Features
+
+### Subsection 2.1
+
+- Feature one
+- Feature two
+- Feature three
+
+### Subsection 2.2
+
+| Column A | Column B | Column C |
+|----------|----------|----------|
+| Value 1  | Value 2  | Value 3  |
+| Value 4  | Value 5  | Value 6  |
+
+## Section 3: Code Examples
+
+```typescript
+interface Config {
+  name: string;
+  version: string;
+  dependencies: Record<string, string>;
+}
+
+class Project {
+  constructor(private config: Config) {}
+  
+  getVersion(): string {
+    return this.config.version;
+  }
+}
+```
+
+```python
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+
+# Generate sequence
+for i in range(10):
+    print(f"F({i}) = {fibonacci(i)}")
+```
+
+## Section 4: More Content
+
+Here's some **bold** text and *italic* text. Let's add a [link](https://example.com) and some `inline code`.
+
+## Section 5: Lists and Nesting
+
+1. First level
+   - Second level
+     - Third level
+       - Fourth level
+   - Back to second
+2. Another first level
+   1. Numbered sub-item
+   2. Another numbered sub-item
+
+## Section 6: Extended Content
+
+This section contains more paragraphs to increase the document size.
+
+Paragraph one with some **emphasis** and *italics*. Including a [reference link](https://docs.example.com) for documentation.
+
+Paragraph two with `inline code` and **bold statements**. More content here.
+
+### Code Block Section
+
+```rust
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+impl Point {
+    fn distance(&self, other: &Point) -> f64 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+```
+
+## Section 7: Repeated Content for Size
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    for i := 0; i < 10; i++ {
+        fmt.Println("Hello, World!")
+    }
+}
+```
+
+## Section 8: More Tables
+
+| Header 1 | Header 2 | Header 3 | Header 4 |
+|----------|----------|----------|----------|
+| Cell 1   | Cell 2   | Cell 3   | Cell 4   |
+| Cell 5   | Cell 6   | Cell 7   | Cell 8   |
+| Cell 9   | Cell 10  | Cell 11  | Cell 12  |
+
+## Section 9: Task Lists
+
+- [x] Completed task
+- [x] Another completed task
+- [ ] Pending task
+- [ ] Another pending task
+
+## Section 10: Footnotes
+
+Here's a reference[^1] to a footnote.
+
+And another[^2] for good measure.
+
+Multiple references[^3] throughout[^4] the document[^5].
+
+[^1]: First footnote content
+[^2]: Second footnote content
+[^3]: Third footnote content
+[^4]: Fourth footnote content
+[^5]: Fifth footnote content
+
+## Section 11-50: Additional Content
+
+Here we repeat similar patterns to create a larger document for stress testing.
+
+### Section 11
+
+```javascript
+const data = [1, 2, 3, 4, 5];
+const doubled = data.map(x => x * 2);
+console.log(doubled);
+```
+
+### Section 12
+
+Another paragraph with **formatting** and *styles*. Including links to [resources](https://example.com).
+
+### Section 13
+
+More code examples:
+
+```python
+class Calculator:
+    def add(self, a, b):
+        return a + b
+    
+    def multiply(self, a, b):
+        return a * b
+```
+
+### Section 14
+
+| Col 1 | Col 2 | Col 3 |
+|-------|-------|-------|
+| A     | B     | C     |
+| D     | E     | F     |
+
+### Section 15
+
+- List item one
+- List item two
+- List item three
+
+### Section 16-50
+
+Continuing with similar patterns...
+
+```typescript
+type Result<T> = { success: true; data: T } | { success: false; error: string };
+
+function process<T>(input: T): Result<T> {
+  try {
+    return { success: true, data: input };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+```
+
+More content to reach a substantial document size. This helps test performance characteristics at scale.
+
+## Conclusion
+
+This large document tests the compiler's performance with substantial content including various MDX features.
+

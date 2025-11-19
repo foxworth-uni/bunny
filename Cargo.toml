@@ -1,0 +1,94 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/bunny-mdx",
+    "crates/bunny",
+    "crates/bunny-mdx-node",
+    "crates/bunny-wasm",
+]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Bunny Contributors"]
+edition = "2021"
+rust-version = "1.77"
+license = "MIT"
+repository = "https://github.com/nine-gen/bunny"
+homepage = "https://bunny.dev"
+categories = ["development-tools", "compilers", "web-programming"]
+keywords = ["mdx", "markdown", "react", "documentation", "rust"]
+
+[workspace.dependencies]
+# Markdown and MDX parsing
+markdown = "1.0.0-alpha.21"
+
+# OXC ecosystem - High-performance JavaScript tooling
+oxc_allocator = "0.97.0"
+oxc_ast = "0.97.0"
+oxc_ast_visit = "0.97.0"
+oxc_codegen = "0.97.0"
+oxc_isolated_declarations = "0.97.0"
+oxc_minifier = "0.97.0"
+oxc_parser = "0.97.0"
+oxc_resolver = "11.13.0"
+oxc_semantic = "0.97.0"
+oxc_sourcemap = "6.0.1"
+oxc_span = "0.97.0"
+oxc_transformer = "0.97.0"
+oxc_transformer_plugins = "0.97.0"
+oxc_traverse = "0.97.0"
+
+# Serialization
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.145"
+serde_yaml = "0.9"
+toml = "0.9.8"
+
+# Error handling
+anyhow = "1.0.100"
+thiserror = "2.0.17"
+
+# Collections and hashing
+rustc-hash = "2.1.1"
+
+# Path handling
+path-clean = "1.0.1"
+
+# Pattern matching
+regex = "1.11.3"
+
+# Logging and tracing
+tracing = "0.1.41"
+
+# Testing and temporary files
+tempfile = "3.23.0"
+
+# Async runtime (for bundler) - native targets only
+# Base tokio with no features - individual crates opt-in to what they need
+tokio = { version = "1.47.1", default-features = false }
+
+# NAPI bindings for Node.js
+napi = "3.5.2"
+napi-derive = "3.3.3"
+
+# WASM compatibility
+uuid = { version = "1.18", features = ["v4", "js", "fast-rng"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+# Rolldown bundler
+rolldown = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-beta.50" }
+rolldown_plugin = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-beta.50" }
+rolldown_common = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-beta.50" }
+rolldown_error = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-beta.50" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

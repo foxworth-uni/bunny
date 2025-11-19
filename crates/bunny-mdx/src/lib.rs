@@ -1,0 +1,332 @@
+//! # bunny-mdx
+//!
+//! Standalone MDX v3 compiler for Rust.
+//!
+//! This crate provides a bundler-agnostic MDX compiler that can be integrated
+//! with any JavaScript build tool. It parses MDX files, converts them to JSX,
+//! and returns all the extracted information (frontmatter, images, exports, etc.)
+//! in simple data structures.
+
+pub mod codegen;
+pub mod error;
+pub mod esm;
+pub mod frontmatter;
+pub mod nodes;
+pub mod plugins;
+pub mod utils;
+
+// Legacy mdx module for gradual migration
+pub mod mdx {
+    //! Legacy MDX module - gradually being deprecated
+
+    pub use crate::codegen::{mdast_to_jsx, mdast_to_jsx_with_options};
+    pub use crate::frontmatter::{extract_frontmatter, FrontmatterData, FrontmatterFormat};
+    pub use crate::plugins::MdxPlugin;
+
+    // Re-export plugins module
+    pub use crate::plugins;
+
+    /// Configuration options for MDX processing
+    pub struct MdxOptions {
+        pub plugins: Vec<Box<dyn MdxPlugin>>,
+        pub jsx_runtime: String,
+    }
+
+    impl Default for MdxOptions {
+        fn default() -> Self {
+            Self {
+                plugins: Vec::new(),
+                jsx_runtime: "react/jsx-runtime".to_string(),
+            }
+        }
+    }
+
+    impl MdxOptions {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        pub fn with_plugin(mut self, plugin: Box<dyn MdxPlugin>) -> Self {
+            self.plugins.push(plugin);
+            self
+        }
+
+        pub fn with_default_plugins(self) -> Self {
+            self.with_plugin(Box::new(plugins::HeadingIdPlugin::default()))
+                .with_plugin(Box::new(plugins::ImageOptimizationPlugin::default()))
+        }
+    }
+}
+
+// Re-export public types
+pub use codegen::{mdast_to_jsx, mdast_to_jsx_with_options};
+pub use error::MdxError;
+pub use frontmatter::{extract_frontmatter, FrontmatterData, FrontmatterFormat};
+pub use plugins::MdxPlugin;
+
+use anyhow::{anyhow, Result};
+
+/// Options for MDX compilation
+pub struct MdxCompileOptions {
+    pub filepath: Option<String>,
+    pub gfm: bool,
+    pub footnotes: bool,
+    pub math: bool,
+    pub jsx_runtime: String,
+    pub plugins: Vec<Box<dyn MdxPlugin>>,
+}
+
+impl std::fmt::Debug for MdxCompileOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MdxCompileOptions")
+            .field("filepath", &self.filepath)
+            .field("gfm", &self.gfm)
+            .field("footnotes", &self.footnotes)
+            .field("math", &self.math)
+            .field("jsx_runtime", &self.jsx_runtime)
+            .field("plugins_count", &self.plugins.len())
+            .finish()
+    }
+}
+
+impl Default for MdxCompileOptions {
+    fn default() -> Self {
+        Self {
+            filepath: None,
+            gfm: false,
+            footnotes: false,
+            math: false,
+            jsx_runtime: "react/jsx-runtime".to_string(),
+            plugins: Vec::new(),
+        }
+    }
+}
+
+impl Clone for MdxCompileOptions {
+    fn clone(&self) -> Self {
+        Self {
+            filepath: self.filepath.clone(),
+            gfm: self.gfm,
+            footnotes: self.footnotes,
+            math: self.math,
+            jsx_runtime: self.jsx_runtime.clone(),
+            plugins: Vec::new(), // Don't clone plugins (trait objects can't be cloned)
+        }
+    }
+}
+
+impl MdxCompileOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_jsx_runtime(mut self, jsx_runtime: impl Into<String>) -> Self {
+        self.jsx_runtime = jsx_runtime.into();
+        self
+    }
+
+    pub fn with_all_features(mut self) -> Self {
+        self.gfm = true;
+        self.footnotes = true;
+        self.math = true;
+        self
+    }
+
+    pub fn with_plugin(mut self, plugin: Box<dyn MdxPlugin>) -> Self {
+        self.plugins.push(plugin);
+        self
+    }
+
+    pub fn with_default_plugins(mut self) -> Self {
+        self.plugins.push(Box::new(plugins::HeadingIdPlugin::default()));
+        self.plugins.push(Box::new(plugins::ImageOptimizationPlugin::default()));
+        self
+    }
+}
+
+/// Result of MDX compilation
+#[derive(Debug, Clone)]
+pub struct MdxCompileResult {
+    pub code: String,
+    pub frontmatter: Option<FrontmatterData>,
+    pub images: Vec<String>,
+    pub named_exports: Vec<String>,
+    pub reexports: Vec<String>,
+    pub imports: Vec<String>,
+    pub default_export: Option<String>,
+}
+
+/// Compile an MDX string to JSX with optional plugins
+pub fn compile(source: &str, options: MdxCompileOptions) -> Result<MdxCompileResult, Box<MdxError>> {
+    // Set up markdown parser options
+    let mut parse_options = markdown::ParseOptions::mdx();
+
+    // Enable ESM parsing with OXC validation
+    parse_options.mdx_esm_parse = Some(Box::new(crate::esm::validate_esm_syntax));
+
+    // Enable frontmatter parsing (YAML and TOML)
+    parse_options.constructs.frontmatter = true;
+
+    // Enable GFM features if requested
+    if options.gfm {
+        parse_options.constructs.gfm_strikethrough = true;
+        parse_options.constructs.gfm_table = true;
+        parse_options.constructs.gfm_task_list_item = true;
+        parse_options.constructs.gfm_autolink_literal = true;
+    }
+
+    // Enable footnotes if requested
+    if options.footnotes {
+        parse_options.constructs.gfm_footnote_definition = true;
+    }
+
+    // Enable math if requested
+    if options.math {
+        parse_options.constructs.math_text = true;
+        parse_options.constructs.math_flow = true;
+    }
+
+    // Parse MDX to markdown AST
+    let mdast = markdown::to_mdast(source, &parse_options).map_err(|e| {
+        let mut err = MdxError::parse_error(e.to_string());
+        if let Some(filepath) = &options.filepath {
+            err = err.with_file(filepath.clone());
+        }
+        Box::new(err)
+    })?;
+
+    // Extract frontmatter (removes frontmatter nodes from AST)
+    let (cleaned_mdast, frontmatter) =
+        extract_frontmatter(&mdast).map_err(|e| Box::new(MdxError::new(e.to_string())))?;
+
+    // Set up MDX conversion options with plugins and jsx_runtime
+    let mut mdx_options = mdx::MdxOptions {
+        plugins: Vec::new(),
+        jsx_runtime: options.jsx_runtime.clone(),
+    };
+    for plugin in options.plugins {
+        mdx_options = mdx_options.with_plugin(plugin);
+    }
+
+    // Convert mdast to JSX (applies plugins during conversion)
+    let jsx_code = mdast_to_jsx_with_options(&cleaned_mdast, &mdx_options).map_err(|e| {
+        let mut err = MdxError::conversion_error(e.to_string());
+        if let Some(filepath) = &options.filepath {
+            err = err.with_file(filepath.clone());
+        }
+        Box::new(err)
+    })?;
+
+    // Extract collected images from ImageOptimizationPlugin
+    let mut images = Vec::new();
+    for plugin in &mdx_options.plugins {
+        if let Some(image_plugin) = plugin
+            .as_any()
+            .downcast_ref::<crate::plugins::ImageOptimizationPlugin>()
+        {
+            images.extend(image_plugin.images());
+        }
+    }
+
+    // Extract ESM statements from the original AST
+    let parsed_exports = extract_esm_info(&mdast).map_err(|e| Box::new(MdxError::new(e.to_string())))?;
+
+    Ok(MdxCompileResult {
+        code: jsx_code,
+        frontmatter,
+        images,
+        named_exports: parsed_exports.named_exports,
+        reexports: parsed_exports.reexports,
+        imports: parsed_exports.imports,
+        default_export: parsed_exports.default_export,
+    })
+}
+
+/// Parsed ES module information from MDX
+struct ParsedExports {
+    named_exports: Vec<String>,
+    reexports: Vec<String>,
+    imports: Vec<String>,
+    default_export: Option<String>,
+}
+
+/// Extract ESM import/export information from the AST
+fn extract_esm_info(root: &markdown::mdast::Node) -> Result<ParsedExports> {
+    use markdown::mdast::Node;
+
+    let Node::Root(root_node) = root else {
+        return Err(anyhow!("Expected Root node"));
+    };
+
+    let mut named_exports = Vec::new();
+    let mut reexports = Vec::new();
+    let mut imports = Vec::new();
+    let mut default_export = None;
+
+    for child in &root_node.children {
+        if let Node::MdxjsEsm(esm) = child {
+            let code = esm.value.trim();
+
+            if crate::esm::is_reexport(code) {
+                reexports.push(code.to_string());
+            } else if crate::esm::has_named_exports(code) {
+                named_exports.push(code.to_string());
+            } else if code.starts_with("export default") {
+                if let Some(name) = crate::esm::get_default_export_name(code) {
+                    default_export = Some(name);
+                }
+            } else if code.starts_with("import ") {
+                imports.push(code.to_string());
+            }
+        }
+    }
+
+    Ok(ParsedExports {
+        named_exports,
+        reexports,
+        imports,
+        default_export,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic_compilation() {
+        let mdx = "# Hello\n\nThis is **bold** text.";
+        let result = compile(mdx, MdxCompileOptions::new()).unwrap();
+
+        assert!(result.code.contains("Hello"));
+        assert!(result.code.contains("bold"));
+    }
+
+    #[test]
+    fn test_with_frontmatter() {
+        let mdx = "---\ntitle: Test\n---\n\n# Hello";
+        let result = compile(mdx, MdxCompileOptions::new()).unwrap();
+
+        assert!(result.frontmatter.is_some());
+        let fm = result.frontmatter.unwrap();
+        assert_eq!(fm.format, FrontmatterFormat::Yaml);
+    }
+
+    #[test]
+    fn test_with_gfm() {
+        let mdx = "This is ~~strikethrough~~ text.";
+        let result = compile(mdx, MdxCompileOptions::new().with_all_features()).unwrap();
+
+        // Should contain del tag for strikethrough
+        assert!(result.code.contains("del"));
+    }
+
+    #[test]
+    fn test_with_math() {
+        let mdx = "Inline math: $E = mc^2$";
+        let result = compile(mdx, MdxCompileOptions::new().with_all_features()).unwrap();
+
+        // Should contain math spans
+        assert!(result.code.contains("math"));
+    }
+}

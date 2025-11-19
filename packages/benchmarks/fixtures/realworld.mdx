@@ -1,0 +1,289 @@
+---
+title: Getting Started with Bunny MDX
+description: A comprehensive guide to using Bunny MDX in your projects
+author: Bunny Team
+date: 2025-11-05
+tags: [tutorial, mdx, rust, react]
+---
+
+# Getting Started with Bunny MDX
+
+Welcome to Bunny MDX! This guide will help you get started with the fastest MDX compiler for JavaScript projects.
+
+## What is Bunny MDX?
+
+Bunny MDX is a **Rust-powered MDX v3 compiler** that brings blazing-fast compilation speeds to your documentation and content workflows. Built from the ground up for performance, Bunny compiles MDX files 10-25x faster than traditional JavaScript-based compilers.
+
+### Key Features
+
+- ⚡ **Blazing Fast** - Rust-powered compilation for maximum performance
+- 🔧 **MDX v3 Compatible** - Full support for the latest MDX specification
+- 🎨 **React 19 Ready** - Modern JSX runtime with automatic imports
+- 📦 **Zero Config** - Works out of the box with sensible defaults
+- 🔌 **Extensible** - Plugin system for custom transformations
+- 🌍 **Universal** - Works with any bundler (Vite, webpack, Rollup, etc.)
+
+## Installation
+
+Install Bunny MDX in your project:
+
+```bash
+npm install @bunny/mdx-node
+# or
+pnpm add @bunny/mdx-node
+# or
+yarn add @bunny/mdx-node
+```
+
+## Basic Usage
+
+Here's how to compile MDX to JSX:
+
+```javascript
+import { compile } from '@bunny/mdx-node';
+
+const mdxSource = `
+# Hello, MDX!
+
+This is a **markdown** document with JSX support.
+`;
+
+const result = compile(mdxSource, {
+  gfm: true,
+  math: true,
+  footnotes: true
+});
+
+console.log(result.code);
+```
+
+### Compilation Options
+
+Bunny supports several compilation options:
+
+| Option      | Type      | Default | Description                           |
+|-------------|-----------|---------|---------------------------------------|
+| `gfm`       | `boolean` | `true`  | Enable GitHub Flavored Markdown       |
+| `math`      | `boolean` | `true`  | Enable math expressions ($...$)       |
+| `footnotes` | `boolean` | `true`  | Enable footnote syntax                |
+| `filepath`  | `string`  | -       | File path for error reporting         |
+
+## Framework Integration
+
+### Next.js
+
+Create a custom loader for Next.js:
+
+```javascript
+// next.config.js
+const { compile } = require('@bunny/mdx-node');
+
+module.exports = {
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.mdx$/,
+      use: [
+        {
+          loader: '@mdx-js/loader',
+          options: {
+            providerImportSource: '@mdx-js/react',
+          },
+        },
+      ],
+    });
+    return config;
+  },
+};
+```
+
+### Vite
+
+Use with Vite through a plugin:
+
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite';
+import { compile } from '@bunny/mdx-node';
+
+export default defineConfig({
+  plugins: [
+    {
+      name: 'bunny-mdx',
+      transform(code, id) {
+        if (id.endsWith('.mdx')) {
+          const result = compile(code, {
+            filepath: id,
+            gfm: true,
+          });
+          return {
+            code: result.code,
+            map: null,
+          };
+        }
+      },
+    },
+  ],
+});
+```
+
+## Advanced Features
+
+### Frontmatter Support
+
+Bunny automatically parses YAML and TOML frontmatter:
+
+```mdx
+---
+title: My Blog Post
+author: Jane Doe
+date: 2025-11-05
+tags: [react, mdx, performance]
+---
+
+# {frontmatter.title}
+
+By {frontmatter.author}
+```
+
+Access frontmatter in your code:
+
+```javascript
+const result = compile(mdxSource);
+console.log(result.frontmatter); // { title: "My Blog Post", ... }
+```
+
+### GFM Features
+
+#### Tables
+
+| Syntax    | Description |
+|-----------|-------------|
+| Header    | Title       |
+| Paragraph | Text        |
+
+#### Task Lists
+
+- [x] Write the documentation
+- [x] Create examples
+- [ ] Deploy to production
+
+#### Strikethrough
+
+~~This text is deleted~~ This text is correct.
+
+## Performance
+
+Bunny MDX is designed for speed. Here's how it compares to other MDX compilers:
+
+```javascript
+// Benchmark results (ops/sec, higher is better)
+// @bunny/mdx-node:    12,547
+// @rspress/mdx-rs:    11,234
+// @mdx-js/mdx:           587
+```
+
+That's **21x faster** than the official JavaScript implementation!
+
+### Why is it so fast?
+
+1. **Rust Performance** - Compiled to native code, no JIT overhead
+2. **Optimized Parsing** - Uses `markdown-rs` for efficient parsing
+3. **Minimal Overhead** - Direct AST transformation without intermediate steps
+4. **NAPI Integration** - Zero-copy data transfer between Rust and Node.js
+
+## Plugin System
+
+Extend Bunny with custom plugins:
+
+```rust
+use bunny_mdx::{compile, MdxCompileOptions, plugins::HeadingIdPlugin};
+
+let options = MdxCompileOptions::new()
+    .with_default_plugins()
+    .with_plugin(Box::new(HeadingIdPlugin::default()));
+```
+
+Available built-in plugins:
+
+- **HeadingIdPlugin** - Generates anchor IDs for headings
+- **ImageOptimizationPlugin** - Collects images for optimization
+- **LinkValidationPlugin** - Validates internal and external links
+
+## Migration Guide
+
+### From @mdx-js/mdx
+
+Bunny is designed to be a drop-in replacement for most use cases:
+
+```diff
+- import { compile } from '@mdx-js/mdx'
++ import { compile } from '@bunny/mdx-node'
+
+const result = await compile(source, {
+-  development: false,
++  gfm: true,
+})
+```
+
+### Breaking Changes
+
+- **Plugins** - Use the Rust plugin API instead of unified plugins
+- **Async** - Bunny's `compile` is synchronous (faster!)
+- **Options** - Simplified option structure
+
+## Troubleshooting
+
+### Common Issues
+
+#### Module not found
+
+Make sure you've installed the native bindings for your platform:
+
+```bash
+npm install @bunny/mdx-node
+```
+
+#### Compilation errors
+
+Enable detailed error reporting:
+
+```javascript
+const result = compile(source, {
+  filepath: 'document.mdx', // Shows file path in errors
+});
+```
+
+### Getting Help
+
+- 📖 [Documentation](https://bunny.dev/docs)
+- 💬 [GitHub Discussions](https://github.com/nine-gen/bunny/discussions)
+- 🐛 [Issue Tracker](https://github.com/nine-gen/bunny/issues)
+
+## What's Next?
+
+- Explore the [API Reference](/docs/api)
+- Check out [Examples](/examples)
+- Learn about [Plugins](/docs/plugins)
+- Read the [Architecture Guide](/docs/architecture)
+
+## Contributing
+
+Bunny is open source! We welcome contributions:
+
+```bash
+git clone https://github.com/nine-gen/bunny
+cd bunny
+pnpm install
+cargo build
+```
+
+See [CONTRIBUTING.md](https://github.com/nine-gen/bunny/blob/main/CONTRIBUTING.md) for details.
+
+## License
+
+MIT © Bunny Contributors
+
+---
+
+Built with 🐰 by the Bunny team
+

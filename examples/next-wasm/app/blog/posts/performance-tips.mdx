@@ -1,0 +1,44 @@
+---
+title: Performance Tips
+description: Optimize your bunny-next application for maximum performance
+date: 2025-01-13
+author: Bunny Team
+tags: [performance, optimization]
+---
+
+# Performance Tips
+
+## Use Server Components
+
+<Callout type="warning">
+Server Components eliminate client-side JavaScript for MDX rendering.
+</Callout>
+
+```typescript
+import { MDXServerComponent } from 'bunny-next/rsc';
+
+export default async function Page() {
+  return <MDXServerComponent source={content} />;
+}
+```
+
+## Enable Caching
+
+<Counter initialCount={50} />
+
+For repeated content, use `serializeWithCache()`:
+
+```typescript
+import { serializeWithCache } from 'bunny-next';
+const mdxSource = await serializeWithCache(content);
+```
+
+## Performance Comparison
+
+| Approach | Client JS | Best For |
+|----------|-----------|----------|
+| Local MDX | Minimal | Static content |
+| MDXRemote | Medium | Dynamic content |
+| MDXServerComponent | **Zero** | SEO & Performance |
+
+<Button variant="primary">Optimize Now</Button>

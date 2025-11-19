@@ -1,0 +1,47 @@
+{
+  "name": "@bunny/mdx-node",
+  "version": "0.1.0",
+  "description": "Node.js bindings for bunny-mdx compiler (core compiler only)",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "napi": {
+    "name": "bunny-mdx-node",
+    "triples": {}
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">= 18"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "scripts": {
+    "build": "napi build --platform --release --strip --esm",
+    "build:debug": "napi build --platform --esm",
+    "test": "node -e \"import('./index.js').then(m => console.log(m.compile('# Test')))\""
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.4.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nine-gen/bunny"
+  },
+  "keywords": [
+    "mdx",
+    "compiler",
+    "jsx",
+    "markdown",
+    "rust",
+    "napi",
+    "bunny"
+  ]
+}

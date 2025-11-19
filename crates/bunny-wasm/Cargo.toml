@@ -1,0 +1,49 @@
+[package]
+name = "bunny-wasm"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description = "WebAssembly bindings for bunny-mdx - compile MDX v3 to JSX in the browser"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Core MDX compiler
+bunny-mdx = { path = "../bunny-mdx", version = "0.1.0" }
+
+# WASM bindings
+wasm-bindgen = "0.2.95"
+serde-wasm-bindgen = "0.6"
+
+# Serialization (workspace dependencies)
+serde.workspace = true
+serde_json.workspace = true
+
+# JavaScript interop
+js-sys = "0.3"
+
+# Console logging and panic hooks for debugging
+console_error_panic_hook = { version = "0.1.7", optional = true }
+wee_alloc = { version = "0.4.5", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.42"
+
+[features]
+# Enable wee_alloc for smaller binary size (trades speed for size)
+default = ["console_error_panic_hook"]
+small = ["wee_alloc"]
+
+[profile.release]
+# Optimize for size - critical for WASM bundles
+opt-level = "z"  # Optimize for size
+lto = true        # Link-time optimization
+codegen-units = 1 # Better optimization
+strip = true      # Strip symbols

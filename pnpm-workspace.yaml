@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+  - crates/bunny-mdx-node
+  - examples/*
+
+onlyBuiltDependencies:
+  - esbuild

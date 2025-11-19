@@ -1,0 +1,113 @@
+# justfile for bunny-wasm - Rust WASM + JSR publishing automation
+# Requires: wasm-pack, deno, just
+# Platform: macOS, Linux
+
+# Variables
+pkg_js := "pkg/bunny_wasm.js"
+directive := '// @ts-self-types="./bunny_wasm.d.ts"'
+
+# Default recipe - show available commands
+default:
+    @just --list
+
+# Build WASM package with wasm-pack
+build:
+    @echo "Building WASM package with wasm-pack..."
+    wasm-pack build --target web --scope fob
+    @echo "✓ WASM build complete"
+
+# Add @ts-self-types directive to generated JavaScript (idempotent)
+prepare-jsr: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Adding JSR @ts-self-types directive..."
+
+    if grep -q '@ts-self-types' {{pkg_js}}; then
+        echo "✓ Directive already exists"
+    else
+        # Create temp file with directive + original content
+        echo '{{directive}}' > {{pkg_js}}.tmp
+        cat {{pkg_js}} >> {{pkg_js}}.tmp
+        mv {{pkg_js}}.tmp {{pkg_js}}
+        echo "✓ Added @ts-self-types directive"
+    fi
+
+    just _validate-directive
+
+# Internal recipe: Validate that the directive exists
+_validate-directive:
+    @if ! grep -q '@ts-self-types="./bunny_wasm.d.ts"' {{pkg_js}}; then \
+        echo "✗ ERROR: @ts-self-types directive not found in {{pkg_js}}"; \
+        exit 1; \
+    fi
+
+# Test JSR publishing with dry-run
+test-jsr: prepare-jsr
+    @echo "Testing JSR publish (dry-run)..."
+    deno publish --dry-run --allow-dirty
+    @echo "✓ JSR dry-run successful"
+
+# Publish to JSR (requires validation)
+publish-jsr: _validate-directive
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Publishing to JSR..."
+    read -p "⚠️  This will publish to JSR. Continue? [y/N] " -n 1 -r
+    echo
+    if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+    deno publish --allow-dirty
+    echo "✓ Published to JSR"
+
+# Run full pipeline: build, prepare, and test
+all: test-jsr
+    @echo "✓ Full pipeline complete - ready to publish!"
+
+# Clean generated artifacts
+clean:
+    @echo "Cleaning pkg directory..."
+    rm -rf pkg target/wasm32-unknown-unknown
+    @echo "✓ Clean complete"
+
+# Rebuild from scratch
+rebuild: clean all
+
+# Show the current @ts-self-types directive status
+status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Checking @ts-self-types directive status..."
+
+    if [ -f {{pkg_js}} ]; then
+        if grep -q '@ts-self-types' {{pkg_js}}; then
+            echo "✓ Directive exists:"
+            grep '@ts-self-types' {{pkg_js}}
+        else
+            echo "✗ Directive NOT found in {{pkg_js}}"
+        fi
+    else
+        echo "✗ {{pkg_js}} does not exist (run 'just build' first)"
+    fi
+
+# Watch mode: rebuild on file changes (requires cargo-watch)
+watch:
+    cargo watch -w src -x 'build --target wasm32-unknown-unknown'
+
+# Verify all prerequisites are installed
+check-deps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Checking dependencies..."
+
+    command -v wasm-pack >/dev/null 2>&1 || { echo "✗ wasm-pack not found"; exit 1; }
+    echo "✓ wasm-pack found"
+
+    command -v deno >/dev/null 2>&1 || { echo "✗ deno not found"; exit 1; }
+    echo "✓ deno found"
+
+    command -v cargo >/dev/null 2>&1 || { echo "✗ cargo not found"; exit 1; }
+    echo "✓ cargo found"
+
+    echo "✓ All dependencies satisfied"

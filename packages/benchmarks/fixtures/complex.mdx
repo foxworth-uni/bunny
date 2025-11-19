@@ -1,0 +1,100 @@
+---
+title: Complex Document
+author: Bunny Team
+tags: [rust, mdx, performance]
+date: 2025-11-05
+---
+
+# Complex MDX Document
+
+This document tests multiple MDX features.
+
+## Code Blocks with Syntax Highlighting
+
+```typescript
+interface User {
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+}
+
+const greet = (user: User): string => {
+  return `Hello, ${user.name}!`;
+};
+```
+
+```rust
+fn fibonacci(n: u32) -> u32 {
+    match n {
+        0 => 0,
+        1 => 1,
+        _ => fibonacci(n - 1) + fibonacci(n - 2),
+    }
+}
+```
+
+## GFM Features
+
+### Tables
+
+| Feature | Bunny | @mdx-js/mdx | @rspress/mdx-rs |
+|---------|-------|-------------|-----------------|
+| Speed   | Fast  | Slow        | Fast            |
+| Plugins | Yes   | Yes         | Limited         |
+| Size    | Small | Large       | Small           |
+
+### Task Lists
+
+- [x] Parse MDX
+- [x] Convert to JSX
+- [ ] World domination
+
+### Strikethrough
+
+This is ~~wrong~~ correct.
+
+## Footnotes
+
+Here's a statement that needs a citation[^1].
+
+Another reference[^2] for good measure.
+
+[^1]: This is the first citation.
+[^2]: This is the second citation.
+
+## Images and Links
+
+![Bunny Logo](./logo.png)
+
+[Documentation](https://bunny.dev)
+
+Check out our [GitHub repo](https://github.com/nine-gen/bunny).
+
+## Lists
+
+1. First item
+2. Second item
+   - Nested item
+   - Another nested item
+     - Deep nesting
+3. Third item
+
+Unordered list:
+
+- Apple
+- Orange
+  - Mandarin
+  - Blood orange
+- Banana
+
+## Blockquotes
+
+> This is a blockquote.
+> It can span multiple lines.
+>
+> And have multiple paragraphs.
+
+## Inline Code
+
+Here's some `inline code` in a sentence. And another `const x = 42;` example.
+
