@@ -1,6 +1,6 @@
 packages:
   - packages/*
-  - crates/bunny-mdx-node
+  - packages/bunny-wasm/fixtures/playground
   - examples/*
 
 onlyBuiltDependencies:

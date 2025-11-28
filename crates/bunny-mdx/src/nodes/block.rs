@@ -3,8 +3,8 @@
 use anyhow::Result;
 use markdown::mdast::{Blockquote, Heading, Paragraph};
 
-use crate::codegen::{CodegenContext, JsValue};
 use super::children_to_jsx;
+use crate::codegen::{CodegenContext, JsValue};
 
 /// Convert heading node to JSX
 pub fn heading_to_jsx(heading: &Heading, ctx: &mut CodegenContext) -> Result<Option<JsValue>> {

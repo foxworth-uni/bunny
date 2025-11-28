@@ -12,6 +12,7 @@ pub struct TableContext {
 }
 
 /// Context for tracking position-based keys and table state
+#[derive(Default)]
 pub struct CodegenContext {
     pub key_counter: usize,
     pub table_stack: Vec<TableContext>,
@@ -29,11 +30,7 @@ pub struct CodegenContext {
 
 impl CodegenContext {
     pub fn new() -> Self {
-        Self {
-            key_counter: 0,
-            table_stack: Vec::new(),
-            imported_components: HashSet::new(),
-        }
+        Self::default()
     }
 
     pub fn enter_table(&mut self, align: Option<Vec<AlignKind>>) {

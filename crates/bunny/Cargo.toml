@@ -8,22 +8,30 @@ license.workspace = true
 repository.workspace = true
 description = "Runtime MDX compiler and bundler - compile+bundle MDX from CMS/database at request time"
 
+[features]
+default = ["bundler"]
+bundler = ["dep:fob", "dep:fob-native", "dep:rolldown_common", "dep:tokio"]
+
 [dependencies]
 # Core Bunny MDX compiler
 bunny-mdx = { path = "../bunny-mdx" }
-
-# Fob bundler core - provides unified build API
-fob = { path = "../../../fob/crates/fob-bundler", package = "fob-bundler" }
-
-# Rolldown types (for accessing bundle output structure)
-rolldown_common.workspace = true
 
 # Error handling
 anyhow.workspace = true
 thiserror.workspace = true
 
+# Bundler dependencies (optional, enabled by "bundler" feature)
+# Fob bundler core - provides unified build API
+fob = { git = "https://github.com/foxworth-uni/fob", package = "fob-bundler", optional = true }
+
+# Fob native runtime - required for asset detection plugin
+fob-native = { git = "https://github.com/foxworth-uni/fob", package = "fob-native", optional = true }
+
+# Rolldown types (for accessing bundle output structure)
+rolldown_common = { workspace = true, optional = true }
+
 # Async runtime (required for fob-core bundling) - native targets only
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"], optional = true }
 
 [dev-dependencies]

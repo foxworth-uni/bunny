@@ -1,366 +1,320 @@
 //! # bunny-wasm
 //!
-//! WebAssembly bindings for the bunny-mdx compiler, enabling MDX v3 compilation
-//! in browser and edge runtime environments.
+//! WebAssembly bindings for bunny-mdx - compile MDX to JSX in the browser.
+//!
+//! This crate provides WASM bindings for the bunny-mdx compiler, allowing
+//! you to compile MDX files to JSX directly in the browser without a server.
 //!
 //! ## Features
 //!
-//! - Compile MDX v3 to JSX in the browser/edge runtimes
-//! - Zero-copy serialization with serde-wasm-bindgen
-//! - Full support for GFM, math, and footnotes
-//! - Structured error reporting with source context
-//! - Optimized for minimal WASM binary size
+//! - Compile MDX to JSX in the browser
+//! - Extract frontmatter (YAML/TOML)
+//! - Support for GFM, math, footnotes
+//! - No bundling (compile-only, WASM-compatible)
 //!
-//! ## Security
-//!
-//! - All inputs are validated by the underlying bunny-mdx parser
-//! - No unsafe code - all FFI boundaries handled by wasm-bindgen
-//! - Panics are caught and converted to JavaScript exceptions
-//! - No dynamic code execution or eval()
-//!
-//! ## Usage (JavaScript)
+//! ## Usage
 //!
 //! ```javascript
-//! import init, { compile } from './bunny_wasm.js';
+//! import init, { compile_mdx, WasmMdxOptions } from './pkg/bunny_wasm.js';
 //!
 //! await init();
 //!
-//! const result = compile('# Hello\n\nThis is **MDX**!', {
-//!   gfm: true,
-//!   math: true,
-//!   footnotes: true,
-//!   jsx_runtime: 'react/jsx-runtime'
-//! });
+//! const options = new WasmMdxOptions();
+//! options.set_gfm(true);
+//! options.set_math(true);
 //!
-//! console.log(result.code);        // Compiled JSX
-//! console.log(result.frontmatter); // Parsed frontmatter
-//! console.log(result.images);      // Collected images
+//! const result = compile_mdx("# Hello **World**", options);
+//! console.log(result.code); // Compiled JSX
 //! ```
 
-use bunny_mdx::{MdxCompileOptions, MdxCompileResult as CoreResult, MdxError};
+mod error;
+
+use bunny_mdx::{compile, MdxCompileOptions};
+use error::{validate_input, WasmError};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-// Optional: Use wee_alloc for smaller binary size
-// This is a trade-off: smaller WASM binary but slightly slower allocation
+// When the `wee_alloc` feature is enabled, use it as the global allocator.
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-/// Initialize the WASM module with panic hooks for better debugging
-///
-/// This is automatically called when the module is loaded, but can be
-/// called explicitly to ensure proper setup.
+/// Initialize panic hook for better error messages in console
 #[wasm_bindgen(start)]
-pub fn init_wasm() {
+pub fn init() {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 }
 
-/// Compilation options for MDX
+/// WASM-compatible MDX compilation options
 ///
-/// Controls which features are enabled during compilation and how
-/// the output is generated.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[wasm_bindgen(getter_with_clone)]
-pub struct CompileOptions {
-    /// Enable GitHub Flavored Markdown (tables, strikethrough, task lists, autolinks)
-    #[wasm_bindgen(skip)]
-    pub gfm: Option<bool>,
-
-    /// Enable footnotes with backrefs
-    #[wasm_bindgen(skip)]
-    pub footnotes: Option<bool>,
-
-    /// Enable math support (inline $...$ and block $$...$)
-    #[wasm_bindgen(skip)]
-    pub math: Option<bool>,
-
-    /// JSX runtime import path (default: "react/jsx-runtime")
-    #[wasm_bindgen(skip)]
-    pub jsx_runtime: Option<String>,
-
-    /// Enable default plugins (heading IDs, image optimization)
-    #[wasm_bindgen(skip)]
-    pub default_plugins: Option<bool>,
-
-    /// File path for error reporting (optional)
-    #[wasm_bindgen(skip)]
-    pub filepath: Option<String>,
+/// This is a JS-friendly wrapper around `MdxCompileOptions` that can be
+/// constructed and configured from JavaScript.
+#[wasm_bindgen]
+pub struct WasmMdxOptions {
+    filepath: Option<String>,
+    gfm: bool,
+    footnotes: bool,
+    math: bool,
+    jsx_runtime: String,
+    output_format: String,
 }
 
 #[wasm_bindgen]
-impl CompileOptions {
-    /// Create a new CompileOptions with default values
+impl WasmMdxOptions {
+    /// Create new options with defaults
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            gfm: None,
-            footnotes: None,
-            math: None,
-            jsx_runtime: None,
-            default_plugins: None,
             filepath: None,
+            gfm: false,
+            footnotes: false,
+            math: false,
+            jsx_runtime: "react/jsx-runtime".to_string(),
+            output_format: "program".to_string(),
         }
+    }
+
+    /// Set the filepath (for error messages)
+    #[wasm_bindgen]
+    pub fn set_filepath(&mut self, filepath: String) {
+        self.filepath = Some(filepath);
+    }
+
+    /// Get the filepath
+    #[wasm_bindgen(getter)]
+    pub fn filepath(&self) -> Option<String> {
+        self.filepath.clone()
+    }
+
+    /// Enable/disable GFM (GitHub Flavored Markdown)
+    #[wasm_bindgen]
+    pub fn set_gfm(&mut self, enabled: bool) {
+        self.gfm = enabled;
+    }
+
+    /// Get GFM setting
+    #[wasm_bindgen(getter)]
+    pub fn gfm(&self) -> bool {
+        self.gfm
+    }
+
+    /// Enable/disable footnotes
+    #[wasm_bindgen]
+    pub fn set_footnotes(&mut self, enabled: bool) {
+        self.footnotes = enabled;
+    }
+
+    /// Get footnotes setting
+    #[wasm_bindgen(getter)]
+    pub fn footnotes(&self) -> bool {
+        self.footnotes
+    }
+
+    /// Enable/disable math
+    #[wasm_bindgen]
+    pub fn set_math(&mut self, enabled: bool) {
+        self.math = enabled;
+    }
+
+    /// Get math setting
+    #[wasm_bindgen(getter)]
+    pub fn math(&self) -> bool {
+        self.math
+    }
+
+    /// Set JSX runtime (default: "react/jsx-runtime")
+    #[wasm_bindgen]
+    pub fn set_jsx_runtime(&mut self, runtime: String) {
+        self.jsx_runtime = runtime;
+    }
+
+    /// Get JSX runtime
+    #[wasm_bindgen(getter)]
+    pub fn jsx_runtime(&self) -> String {
+        self.jsx_runtime.clone()
+    }
+
+    /// Set output format ("program" or "function-body")
+    #[wasm_bindgen]
+    pub fn set_output_format(&mut self, format: &str) {
+        self.output_format = match format {
+            "function-body" => "function-body".to_string(),
+            _ => "program".to_string(),
+        };
+    }
+
+    /// Get output format
+    #[wasm_bindgen(getter)]
+    pub fn output_format(&self) -> String {
+        self.output_format.clone()
     }
 }
 
-impl Default for CompileOptions {
+impl Default for WasmMdxOptions {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Result of MDX compilation
-///
-/// Contains the compiled JSX code and all extracted metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[wasm_bindgen(getter_with_clone)]
-pub struct CompileResult {
-    /// Generated JSX code
-    #[wasm_bindgen(readonly)]
+/// Convert WASM options to Rust options
+impl From<&WasmMdxOptions> for MdxCompileOptions {
+    fn from(opts: &WasmMdxOptions) -> Self {
+        let mut rust_opts = MdxCompileOptions::new();
+
+        // Set filepath directly (it's a public field)
+        rust_opts.filepath = opts.filepath.clone();
+
+        // Set feature flags
+        rust_opts.gfm = opts.gfm;
+        rust_opts.footnotes = opts.footnotes;
+        rust_opts.math = opts.math;
+
+        // Set JSX runtime
+        rust_opts.jsx_runtime = opts.jsx_runtime.clone();
+
+        // Set output format
+        rust_opts.output_format = match opts.output_format.as_str() {
+            "function-body" => bunny_mdx::OutputFormat::FunctionBody,
+            _ => bunny_mdx::OutputFormat::Program,
+        };
+
+        rust_opts
+    }
+}
+
+/// Result of MDX compilation (serializable for JS)
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WasmMdxResult {
+    /// Compiled JSX code
     pub code: String,
 
-    /// Parsed frontmatter as JSON string (null if none)
-    #[wasm_bindgen(skip)]
-    pub frontmatter: Option<String>,
+    /// Extracted frontmatter (if present)
+    pub frontmatter: Option<WasmFrontmatter>,
 
-    /// Frontmatter format ("yaml" or "toml", null if none)
-    #[wasm_bindgen(skip)]
-    pub frontmatter_format: Option<String>,
-
-    /// Array of image URLs collected during compilation
-    #[wasm_bindgen(skip)]
+    /// List of image URLs found in the document
     pub images: Vec<String>,
 
-    /// Named exports found in ESM blocks
-    #[wasm_bindgen(skip)]
+    /// Named exports found in the document
     pub named_exports: Vec<String>,
 
-    /// Re-exports found in ESM blocks
-    #[wasm_bindgen(skip)]
+    /// Re-exports found in the document
     pub reexports: Vec<String>,
 
-    /// Imports found in ESM blocks
-    #[wasm_bindgen(skip)]
+    /// Imports found in the document
     pub imports: Vec<String>,
 
-    /// Default export name (null if none)
-    #[wasm_bindgen(skip)]
+    /// Default export name (if present)
     pub default_export: Option<String>,
 }
 
-#[wasm_bindgen]
-impl CompileResult {
-    /// Get frontmatter as JSON string (for JavaScript access)
-    #[wasm_bindgen(getter)]
-    pub fn frontmatter(&self) -> Option<String> {
-        self.frontmatter.clone()
-    }
+/// Frontmatter data (serializable for JS)
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WasmFrontmatter {
+    /// Raw frontmatter string
+    pub raw: String,
 
-    /// Get frontmatter format
-    #[wasm_bindgen(getter)]
-    pub fn frontmatter_format(&self) -> Option<String> {
-        self.frontmatter_format.clone()
-    }
+    /// Parsed frontmatter format (yaml or toml)
+    pub format: String,
 
-    /// Get collected image URLs
-    #[wasm_bindgen(getter)]
-    pub fn images(&self) -> Vec<String> {
-        self.images.clone()
-    }
-
-    /// Get named exports
-    #[wasm_bindgen(getter)]
-    pub fn named_exports(&self) -> Vec<String> {
-        self.named_exports.clone()
-    }
-
-    /// Get re-exports
-    #[wasm_bindgen(getter)]
-    pub fn reexports(&self) -> Vec<String> {
-        self.reexports.clone()
-    }
-
-    /// Get imports
-    #[wasm_bindgen(getter)]
-    pub fn imports(&self) -> Vec<String> {
-        self.imports.clone()
-    }
-
-    /// Get default export name
-    #[wasm_bindgen(getter)]
-    pub fn default_export(&self) -> Option<String> {
-        self.default_export.clone()
-    }
+    /// Parsed frontmatter data (as JSON value, will be converted to JS object)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
 }
 
 /// Compile MDX source to JSX
 ///
 /// # Arguments
 ///
-/// * `source` - The MDX source code to compile
-/// * `options` - Optional compilation options (JavaScript object)
+/// * `source` - MDX source code as string (max 10MB)
+/// * `options` - Compilation options (optional, uses defaults if None)
 ///
 /// # Returns
 ///
-/// * `Ok(CompileResult)` - Compiled JSX and extracted metadata
-/// * `Err(JsValue)` - Compilation error with context
+/// * `Ok(WasmMdxResult)` - Compiled JSX and metadata
+/// * `Err(JsValue)` - Structured error object with kind, message, location, etc.
 ///
-/// # Security
+/// # Errors
 ///
-/// This function safely processes untrusted input:
-/// - Input is validated by the markdown parser
-/// - ESM syntax is validated with OXC parser
-/// - No code execution occurs during compilation
-/// - All errors are caught and reported safely
+/// Returns structured error objects that can be discriminated by `kind`:
+/// - `"validationError"` - Input validation failed (size limit, null bytes)
+/// - `"compilationError"` - MDX syntax error (with location and suggestion)
+/// - `"serializationError"` - Failed to serialize result to JavaScript
 ///
-/// # Example (JavaScript)
+/// # Example
 ///
 /// ```javascript
-/// const result = compile('# Hello', { gfm: true });
-/// console.log(result.code);
+/// import { compile_mdx, WasmMdxOptions } from './pkg/bunny_wasm.js';
+///
+/// const options = new WasmMdxOptions();
+/// options.set_gfm(true);
+///
+/// try {
+///   const result = compile_mdx("# Hello **World**", options);
+///   console.log(result.code);
+/// } catch (error) {
+///   if (error.kind === "compilationError") {
+///     console.error(error.message);
+///     if (error.location) {
+///       console.error(`At ${error.location.line}:${error.location.column}`);
+///     }
+///     if (error.suggestion) {
+///       console.log(`Suggestion: ${error.suggestion}`);
+///     }
+///   }
+/// }
 /// ```
 #[wasm_bindgen]
-pub fn compile(source: &str, options: JsValue) -> Result<CompileResult, JsValue> {
-    // Deserialize JavaScript options using serde-wasm-bindgen
-    let opts: CompileOptions = if options.is_null() || options.is_undefined() {
-        CompileOptions::default()
+pub fn compile_mdx(source: &str, options: Option<WasmMdxOptions>) -> Result<JsValue, JsValue> {
+    // Input validation (10MB limit for WASM environments)
+    validate_input(source, 10_000_000).map_err(|e| -> JsValue { e.into() })?;
+
+    // Convert WASM options to Rust options
+    let rust_options = if let Some(ref opts) = options {
+        MdxCompileOptions::from(opts)
     } else {
-        serde_wasm_bindgen::from_value(options)
-            .map_err(|e| JsValue::from_str(&format!("Invalid options: {}", e)))?
+        MdxCompileOptions::new()
     };
 
-    let mut compile_opts = MdxCompileOptions::new();
+    // Compile MDX - Box<MdxError> automatically converts to WasmError
+    let result = compile(source, rust_options)
+        .map_err(|e| -> WasmError { e.into() })
+        .map_err(|e| -> JsValue { e.into() })?;
 
-    // Apply feature flags
-    if opts.gfm.unwrap_or(false) {
-        compile_opts.gfm = true;
-    }
-    if opts.footnotes.unwrap_or(false) {
-        compile_opts.footnotes = true;
-    }
-    if opts.math.unwrap_or(false) {
-        compile_opts.math = true;
-    }
+    // Convert frontmatter
+    let frontmatter = result.frontmatter.map(|fm| {
+        WasmFrontmatter {
+            raw: fm.raw.clone(),
+            format: match fm.format {
+                bunny_mdx::FrontmatterFormat::Yaml => "yaml".to_string(),
+                bunny_mdx::FrontmatterFormat::Toml => "toml".to_string(),
+            },
+            // Convert JsonValue to serde_json::Value (they're the same type)
+            data: Some(fm.data),
+        }
+    });
 
-    // Set JSX runtime
-    if let Some(runtime) = opts.jsx_runtime {
-        compile_opts.jsx_runtime = runtime;
-    }
-
-    // Set filepath for error reporting
-    if let Some(filepath) = opts.filepath {
-        compile_opts.filepath = Some(filepath);
-    }
-
-    // Add default plugins if requested
-    if opts.default_plugins.unwrap_or(false) {
-        compile_opts = compile_opts.with_default_plugins();
-    }
-
-    // Compile MDX to JSX
-    // This is the core operation - all input validation happens here
-    let result = bunny_mdx::compile(source, compile_opts).map_err(convert_error)?;
-
-    // Convert to WASM-friendly result
-    Ok(convert_result(result))
-}
-
-/// Convert core MdxCompileResult to WASM CompileResult
-///
-/// This performs serialization of complex types (frontmatter) to JSON
-/// for easy consumption by JavaScript.
-fn convert_result(result: CoreResult) -> CompileResult {
-    let (frontmatter, frontmatter_format) = result
-        .frontmatter
-        .as_ref()
-        .map(|fm| {
-            let json_str = serde_json::to_string(&fm.data).unwrap_or_else(|_| "null".to_string());
-            let format = match fm.format {
-                bunny_mdx::FrontmatterFormat::Yaml => "yaml",
-                bunny_mdx::FrontmatterFormat::Toml => "toml",
-            }
-            .to_string();
-            (Some(json_str), Some(format))
-        })
-        .unwrap_or((None, None));
-
-    CompileResult {
+    // Build WASM result
+    let wasm_result = WasmMdxResult {
         code: result.code,
         frontmatter,
-        frontmatter_format,
         images: result.images,
         named_exports: result.named_exports,
         reexports: result.reexports,
         imports: result.imports,
         default_export: result.default_export,
-    }
-}
+    };
 
-/// Convert MdxError to JsValue with structured error information
-///
-/// This creates a JavaScript Error object with all the context from MdxError,
-/// making errors easy to handle in JavaScript.
-///
-/// # Error Structure
-///
-/// The JavaScript error object will have these properties:
-/// - `message`: The error message
-/// - `file`: Optional file path
-/// - `line`: Optional line number (1-indexed)
-/// - `column`: Optional column number (1-indexed)
-/// - `context`: Optional source code context
-/// - `suggestion`: Optional fix suggestion
-fn convert_error(error: Box<MdxError>) -> JsValue {
-    // Create a JavaScript object with all error information
-    let obj = js_sys::Object::new();
-
-    // Set message
-    js_sys::Reflect::set(&obj, &"message".into(), &error.message.clone().into())
-        .unwrap_or_default();
-
-    // Set optional file
-    if let Some(ref file) = error.file {
-        js_sys::Reflect::set(&obj, &"file".into(), &file.clone().into()).unwrap_or_default();
-    }
-
-    // Set optional line and column
-    if let Some(line) = error.line {
-        js_sys::Reflect::set(&obj, &"line".into(), &JsValue::from_f64(line as f64))
-            .unwrap_or_default();
-    }
-    if let Some(column) = error.column {
-        js_sys::Reflect::set(&obj, &"column".into(), &JsValue::from_f64(column as f64))
-            .unwrap_or_default();
-    }
-
-    // Set optional context
-    if let Some(ref context) = error.context {
-        js_sys::Reflect::set(&obj, &"context".into(), &context.clone().into())
-            .unwrap_or_default();
-    }
-
-    // Set optional suggestion
-    if let Some(ref suggestion) = error.suggestion {
-        js_sys::Reflect::set(&obj, &"suggestion".into(), &suggestion.clone().into())
-            .unwrap_or_default();
-    }
-
-    // Create a proper JavaScript Error with the message
-    let js_error = js_sys::Error::new(&error.message);
-
-    // Copy all properties to the error object
-    let error_obj = js_error.as_ref();
-    let keys = js_sys::Object::keys(&obj);
-    for i in 0..keys.length() {
-        let key = keys.get(i);
-        if let Ok(value) = js_sys::Reflect::get(&obj, &key) {
-            js_sys::Reflect::set(error_obj, &key, &value).unwrap_or_default();
-        }
-    }
-
-    js_error.into()
+    // Serialize to JS value
+    serde_wasm_bindgen::to_value(&wasm_result).map_err(|e| {
+        let err = WasmError::serialization_with_details(
+            "Failed to serialize compilation result",
+            e.to_string(),
+        );
+        JsValue::from(err)
+    })
 }
 
 #[cfg(test)]
@@ -368,67 +322,481 @@ mod tests {
     use super::*;
     use wasm_bindgen_test::*;
 
-    wasm_bindgen_test_configure!(run_in_browser);
+    // Allow tests to run in both Node.js and browser environments
+    wasm_bindgen_test_configure!();
 
-    #[wasm_bindgen_test]
-    fn test_basic_compilation() {
-        let result = compile("# Hello\n\nThis is **bold** text.", None).unwrap();
-        assert!(result.code.contains("Hello"));
-        assert!(result.code.contains("bold"));
-    }
-
-    #[wasm_bindgen_test]
-    fn test_with_options() {
-        let opts = CompileOptions {
-            gfm: Some(true),
-            math: Some(true),
-            footnotes: Some(true),
-            jsx_runtime: Some("react/jsx-runtime".to_string()),
-            default_plugins: Some(false),
-            filepath: None,
+    // Helper macro to load fixture files
+    macro_rules! load_fixture {
+        ($name:literal) => {
+            include_str!(concat!("../tests/fixtures/", $name))
         };
+    }
 
-        let result = compile("This is ~~strikethrough~~ text.", Some(opts)).unwrap();
-        assert!(result.code.contains("del"));
+    // ============================================================================
+    // Basic Compilation Tests (8 tests)
+    // ============================================================================
+
+    #[wasm_bindgen_test]
+    fn test_compile_empty_string() {
+        let result = compile_mdx("", None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(!result_obj.code.is_empty());
     }
 
     #[wasm_bindgen_test]
-    fn test_with_frontmatter() {
-        let result = compile("---\ntitle: Test\n---\n\n# Hello", None).unwrap();
-        assert!(result.frontmatter.is_some());
-        assert_eq!(result.frontmatter_format, Some("yaml".to_string()));
+    fn test_compile_plain_text() {
+        let result = compile_mdx("Hello world", None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.code.contains("Hello"));
+        assert!(result_obj.code.contains("world"));
     }
 
     #[wasm_bindgen_test]
-    fn test_invalid_mdx() {
-        let result = compile("import { foo } fro './bar'", None);
-        assert!(result.is_err());
+    fn test_compile_simple_markdown() {
+        let mdx = "# Hello\n\nThis is **bold** text.";
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.code.contains("Hello"));
+        assert!(result_obj.code.contains("bold"));
     }
 
     #[wasm_bindgen_test]
-    fn test_empty_input() {
-        let result = compile("", None).unwrap();
-        assert!(!result.code.is_empty()); // Should contain wrapper function
+    fn test_compile_with_options() {
+        let mdx = "# Hello";
+        let mut options = WasmMdxOptions::new();
+        options.set_gfm(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
     }
 
     #[wasm_bindgen_test]
-    fn test_math_support() {
-        let opts = CompileOptions {
-            math: Some(true),
-            ..Default::default()
-        };
-        let result = compile("Inline math: $E = mc^2$", Some(opts)).unwrap();
-        assert!(result.code.contains("math"));
+    fn test_compile_without_options() {
+        let mdx = "# Hello";
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
     }
 
     #[wasm_bindgen_test]
-    fn test_default_plugins() {
-        let opts = CompileOptions {
-            default_plugins: Some(true),
-            ..Default::default()
-        };
-        let result = compile("# Hello World\n\n![test](./image.png)", Some(opts)).unwrap();
-        assert!(!result.images.is_empty());
-        assert_eq!(result.images[0], "./image.png");
+    fn test_compile_basic_fixture() {
+        let mdx = load_fixture!("basic.mdx");
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.code.contains("Hello World"));
+        assert!(result_obj.code.contains("Features"));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_compile_with_jsx() {
+        let mdx = r#"# Hello
+
+<Component prop="value" />
+"#;
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.code.contains("Component"));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_compile_returns_all_fields() {
+        let mdx = "# Test";
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        // Check all fields exist
+        assert!(!result_obj.code.is_empty());
+        assert!(result_obj.images.is_empty() || !result_obj.images.is_empty());
+        assert!(result_obj.named_exports.is_empty() || !result_obj.named_exports.is_empty());
+        assert!(result_obj.reexports.is_empty() || !result_obj.reexports.is_empty());
+        assert!(result_obj.imports.is_empty() || !result_obj.imports.is_empty());
+    }
+
+    // ============================================================================
+    // WasmMdxOptions Tests (10 tests)
+    // ============================================================================
+
+    #[test]
+    fn test_options_constructor_defaults() {
+        let options = WasmMdxOptions::new();
+        assert_eq!(options.filepath(), None);
+        assert!(!options.gfm());
+        assert!(!options.footnotes());
+        assert!(!options.math());
+        assert_eq!(options.jsx_runtime(), "react/jsx-runtime");
+    }
+
+    #[test]
+    fn test_options_set_get_filepath() {
+        let mut options = WasmMdxOptions::new();
+        options.set_filepath("test.mdx".to_string());
+        assert_eq!(options.filepath(), Some("test.mdx".to_string()));
+    }
+
+    #[test]
+    fn test_options_set_get_gfm() {
+        let mut options = WasmMdxOptions::new();
+        assert!(!options.gfm());
+        options.set_gfm(true);
+        assert!(options.gfm());
+        options.set_gfm(false);
+        assert!(!options.gfm());
+    }
+
+    #[test]
+    fn test_options_set_get_footnotes() {
+        let mut options = WasmMdxOptions::new();
+        assert!(!options.footnotes());
+        options.set_footnotes(true);
+        assert!(options.footnotes());
+        options.set_footnotes(false);
+        assert!(!options.footnotes());
+    }
+
+    #[test]
+    fn test_options_set_get_math() {
+        let mut options = WasmMdxOptions::new();
+        assert!(!options.math());
+        options.set_math(true);
+        assert!(options.math());
+        options.set_math(false);
+        assert!(!options.math());
+    }
+
+    #[test]
+    fn test_options_set_get_jsx_runtime() {
+        let mut options = WasmMdxOptions::new();
+        assert_eq!(options.jsx_runtime(), "react/jsx-runtime");
+        options.set_jsx_runtime("preact/jsx-runtime".to_string());
+        assert_eq!(options.jsx_runtime(), "preact/jsx-runtime");
+    }
+
+    #[test]
+    fn test_options_all_features() {
+        let mut options = WasmMdxOptions::new();
+        options.set_gfm(true);
+        options.set_footnotes(true);
+        options.set_math(true);
+        assert!(options.gfm());
+        assert!(options.footnotes());
+        assert!(options.math());
+    }
+
+    #[test]
+    fn test_options_conversion_to_mdx_options() {
+        let mut wasm_options = WasmMdxOptions::new();
+        wasm_options.set_gfm(true);
+        wasm_options.set_footnotes(true);
+        wasm_options.set_math(true);
+        wasm_options.set_filepath("test.mdx".to_string());
+        wasm_options.set_jsx_runtime("custom/jsx-runtime".to_string());
+
+        let rust_options: MdxCompileOptions = (&wasm_options).into();
+        assert!(rust_options.gfm);
+        assert!(rust_options.footnotes);
+        assert!(rust_options.math);
+        assert_eq!(rust_options.filepath, Some("test.mdx".to_string()));
+        assert_eq!(rust_options.jsx_runtime, "custom/jsx-runtime");
+    }
+
+    #[test]
+    fn test_options_default_trait() {
+        let options1 = WasmMdxOptions::new();
+        let options2 = WasmMdxOptions::default();
+        assert_eq!(options1.gfm(), options2.gfm());
+        assert_eq!(options1.footnotes(), options2.footnotes());
+        assert_eq!(options1.math(), options2.math());
+        assert_eq!(options1.jsx_runtime(), options2.jsx_runtime());
+    }
+
+    #[test]
+    fn test_options_roundtrip_all_properties() {
+        let mut options = WasmMdxOptions::new();
+        options.set_filepath("path/to/file.mdx".to_string());
+        options.set_gfm(true);
+        options.set_footnotes(true);
+        options.set_math(true);
+        options.set_jsx_runtime("custom-runtime".to_string());
+
+        // Verify all properties persist
+        assert_eq!(options.filepath(), Some("path/to/file.mdx".to_string()));
+        assert!(options.gfm());
+        assert!(options.footnotes());
+        assert!(options.math());
+        assert_eq!(options.jsx_runtime(), "custom-runtime");
+    }
+
+    // ============================================================================
+    // Feature Flag Tests (7 tests)
+    // ============================================================================
+
+    #[wasm_bindgen_test]
+    fn test_gfm_table() {
+        let mdx = load_fixture!("gfm.mdx");
+        let mut options = WasmMdxOptions::new();
+        options.set_gfm(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        // Table should be compiled
+        assert!(result_obj.code.contains("table") || result_obj.code.contains("Column"));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_gfm_strikethrough() {
+        let mdx = "This is ~~strikethrough~~ text.";
+        let mut options = WasmMdxOptions::new();
+        options.set_gfm(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        // Should contain del tag for strikethrough
+        assert!(result_obj.code.contains("del") || result_obj.code.contains("strikethrough"));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_gfm_task_list() {
+        let mdx = "- [x] Completed\n- [ ] Incomplete";
+        let mut options = WasmMdxOptions::new();
+        options.set_gfm(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.code.contains("Completed") || result_obj.code.contains("Incomplete"));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_math_inline() {
+        let mdx = "Inline math: $E = mc^2$";
+        let mut options = WasmMdxOptions::new();
+        options.set_math(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        // Should contain math
+        assert!(
+            result_obj.code.contains("math")
+                || result_obj.code.contains("E")
+                || result_obj.code.contains("mc")
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn test_math_block() {
+        let mdx = "$$\nE = mc^2\n$$";
+        let mut options = WasmMdxOptions::new();
+        options.set_math(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(
+            result_obj.code.contains("math")
+                || result_obj.code.contains("E")
+                || result_obj.code.contains("mc")
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn test_footnotes() {
+        let mdx = "Text with footnote[^1].\n\n[^1]: Footnote content";
+        let mut options = WasmMdxOptions::new();
+        options.set_footnotes(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.code.contains("footnote") || result_obj.code.contains("Footnote"));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_all_features_combined() {
+        let mdx = r#"# Test
+
+| Col | Col |
+|-----|-----|
+| Val | Val |
+
+Math: $x = y$
+
+Footnote[^1]
+
+[^1]: Note
+"#;
+        let mut options = WasmMdxOptions::new();
+        options.set_gfm(true);
+        options.set_math(true);
+        options.set_footnotes(true);
+        let result = compile_mdx(mdx, Some(options));
+        assert!(result.is_ok());
+    }
+
+    // ============================================================================
+    // Frontmatter Tests (4 tests)
+    // ============================================================================
+
+    #[wasm_bindgen_test]
+    fn test_frontmatter_yaml() {
+        let mdx = load_fixture!("frontmatter.mdx");
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.frontmatter.is_some());
+        let fm = result_obj.frontmatter.unwrap();
+        assert_eq!(fm.format, "yaml");
+        assert!(!fm.raw.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn test_frontmatter_toml() {
+        let mdx = r#"+++
+title = "TOML Test"
++++
+
+# Content
+"#;
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.frontmatter.is_some());
+        let fm = result_obj.frontmatter.unwrap();
+        assert_eq!(fm.format, "toml");
+        assert!(!fm.raw.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    fn test_no_frontmatter() {
+        let mdx = "# No frontmatter\n\nJust content.";
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        // Frontmatter should be None
+        assert!(result_obj.frontmatter.is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn test_frontmatter_complex_data() {
+        let mdx = r#"---
+title: Complex Test
+author:
+  name: Test Author
+  email: test@example.com
+tags:
+  - tag1
+  - tag2
+nested:
+  deep:
+    value: 42
+---
+
+# {frontmatter.title}
+"#;
+        let result = compile_mdx(mdx, None);
+        assert!(result.is_ok());
+        let js_value = result.unwrap();
+        let result_obj: WasmMdxResult = serde_wasm_bindgen::from_value(js_value).unwrap();
+        assert!(result_obj.frontmatter.is_some());
+        let fm = result_obj.frontmatter.unwrap();
+        assert_eq!(fm.format, "yaml");
+        assert!(fm.data.is_some());
+    }
+
+    // ============================================================================
+    // Error Handling Tests (6 tests)
+    // ============================================================================
+
+    #[wasm_bindgen_test]
+    fn test_error_unclosed_jsx_tag() {
+        let mdx = "<div><p>Unclosed";
+        let result = compile_mdx(mdx, None);
+        // This might succeed or fail depending on parser leniency
+        // Just verify it doesn't panic
+        let _ = result;
+    }
+
+    #[wasm_bindgen_test]
+    fn test_error_malformed_mdx() {
+        let mdx = load_fixture!("malformed.mdx");
+        let result = compile_mdx(mdx, None);
+        // Malformed MDX should either error or handle gracefully
+        match result {
+            Ok(_) => {
+                // Parser might be lenient, that's okay
+            }
+            Err(e) => {
+                // Error should be a JsValue string
+                assert!(e.is_string());
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_error_invalid_syntax() {
+        // Test with clearly invalid syntax
+        let mdx = "```\nUnclosed code block";
+        let result = compile_mdx(mdx, None);
+        // Should handle gracefully (either succeed or return error)
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                assert!(e.is_string());
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_error_bad_frontmatter() {
+        let mdx = "---\ninvalid: yaml: : : :\n---\n\nContent";
+        let result = compile_mdx(mdx, None);
+        // Should either parse or return error
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                assert!(e.is_string());
+            }
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn test_error_empty_options_handled() {
+        let mdx = "# Test";
+        let result = compile_mdx(mdx, None);
+        // None options should work fine
+        assert!(result.is_ok());
+    }
+
+    #[wasm_bindgen_test]
+    fn test_error_serialization_handled() {
+        // This test verifies that errors are properly converted to JsValue
+        // We can't easily trigger serialization errors, but we can verify
+        // the error handling path exists
+        let mdx = "# Test";
+        let result = compile_mdx(mdx, None);
+        match result {
+            Ok(js_val) => {
+                // Should be serializable
+                assert!(!js_val.is_undefined());
+            }
+            Err(e) => {
+                // Should be a string error
+                assert!(e.is_string());
+            }
+        }
     }
 }

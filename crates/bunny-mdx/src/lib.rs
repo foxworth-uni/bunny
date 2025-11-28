@@ -30,6 +30,9 @@ pub mod mdx {
     pub struct MdxOptions {
         pub plugins: Vec<Box<dyn MdxPlugin>>,
         pub jsx_runtime: String,
+        pub output_format: crate::OutputFormat,
+        /// Pre-extracted frontmatter (passed from compile() to avoid double extraction)
+        pub frontmatter: Option<crate::FrontmatterData>,
     }
 
     impl Default for MdxOptions {
@@ -37,6 +40,8 @@ pub mod mdx {
             Self {
                 plugins: Vec::new(),
                 jsx_runtime: "react/jsx-runtime".to_string(),
+                output_format: crate::OutputFormat::default(),
+                frontmatter: None,
             }
         }
     }
@@ -66,6 +71,16 @@ pub use plugins::MdxPlugin;
 
 use anyhow::{anyhow, Result};
 
+/// Output format for compiled MDX code
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum OutputFormat {
+    /// ES module with import/export (current default)
+    #[default]
+    Program,
+    /// Function body format for runtime eval with new Function()
+    FunctionBody,
+}
+
 /// Options for MDX compilation
 pub struct MdxCompileOptions {
     pub filepath: Option<String>,
@@ -74,6 +89,7 @@ pub struct MdxCompileOptions {
     pub math: bool,
     pub jsx_runtime: String,
     pub plugins: Vec<Box<dyn MdxPlugin>>,
+    pub output_format: OutputFormat,
 }
 
 impl std::fmt::Debug for MdxCompileOptions {
@@ -84,6 +100,7 @@ impl std::fmt::Debug for MdxCompileOptions {
             .field("footnotes", &self.footnotes)
             .field("math", &self.math)
             .field("jsx_runtime", &self.jsx_runtime)
+            .field("output_format", &self.output_format)
             .field("plugins_count", &self.plugins.len())
             .finish()
     }
@@ -98,6 +115,7 @@ impl Default for MdxCompileOptions {
             math: false,
             jsx_runtime: "react/jsx-runtime".to_string(),
             plugins: Vec::new(),
+            output_format: OutputFormat::default(),
         }
     }
 }
@@ -111,6 +129,7 @@ impl Clone for MdxCompileOptions {
             math: self.math,
             jsx_runtime: self.jsx_runtime.clone(),
             plugins: Vec::new(), // Don't clone plugins (trait objects can't be cloned)
+            output_format: self.output_format,
         }
     }
 }
@@ -138,8 +157,10 @@ impl MdxCompileOptions {
     }
 
     pub fn with_default_plugins(mut self) -> Self {
-        self.plugins.push(Box::new(plugins::HeadingIdPlugin::default()));
-        self.plugins.push(Box::new(plugins::ImageOptimizationPlugin::default()));
+        self.plugins
+            .push(Box::new(plugins::HeadingIdPlugin::default()));
+        self.plugins
+            .push(Box::new(plugins::ImageOptimizationPlugin::default()));
         self
     }
 }
@@ -157,7 +178,10 @@ pub struct MdxCompileResult {
 }
 
 /// Compile an MDX string to JSX with optional plugins
-pub fn compile(source: &str, options: MdxCompileOptions) -> Result<MdxCompileResult, Box<MdxError>> {
+pub fn compile(
+    source: &str,
+    options: MdxCompileOptions,
+) -> Result<MdxCompileResult, Box<MdxError>> {
     // Set up markdown parser options
     let mut parse_options = markdown::ParseOptions::mdx();
 
@@ -203,6 +227,8 @@ pub fn compile(source: &str, options: MdxCompileOptions) -> Result<MdxCompileRes
     let mut mdx_options = mdx::MdxOptions {
         plugins: Vec::new(),
         jsx_runtime: options.jsx_runtime.clone(),
+        output_format: options.output_format,
+        frontmatter: frontmatter.clone(),
     };
     for plugin in options.plugins {
         mdx_options = mdx_options.with_plugin(plugin);
@@ -229,7 +255,8 @@ pub fn compile(source: &str, options: MdxCompileOptions) -> Result<MdxCompileRes
     }
 
     // Extract ESM statements from the original AST
-    let parsed_exports = extract_esm_info(&mdast).map_err(|e| Box::new(MdxError::new(e.to_string())))?;
+    let parsed_exports =
+        extract_esm_info(&mdast).map_err(|e| Box::new(MdxError::new(e.to_string())))?;
 
     Ok(MdxCompileResult {
         code: jsx_code,
@@ -328,5 +355,37 @@ mod tests {
 
         // Should contain math spans
         assert!(result.code.contains("math"));
+    }
+
+    #[test]
+    fn test_function_body_output_format() {
+        let mdx = "---\ntitle: Test\n---\n\n# Hello";
+        let mut options = MdxCompileOptions::new();
+        options.output_format = OutputFormat::FunctionBody;
+        let result = compile(mdx, options).unwrap();
+
+        // Function-body format should:
+        // 1. Start with "use strict"
+        assert!(result.code.starts_with("\"use strict\""));
+        // 2. Use arguments[0] for jsx runtime
+        assert!(result.code.contains("arguments[0]"));
+        // 3. Have const frontmatter (not export const)
+        assert!(result.code.contains("const frontmatter ="));
+        assert!(!result.code.contains("export const frontmatter"));
+        // 4. NOT have import statements
+        assert!(!result.code.contains("import {"));
+        // 5. Have a return statement with exports
+        assert!(result.code.contains("return {default: MDXContent"));
+        assert!(result.code.contains("frontmatter: frontmatter"));
+    }
+
+    #[test]
+    fn test_program_output_format_default() {
+        let mdx = "# Hello";
+        let result = compile(mdx, MdxCompileOptions::new()).unwrap();
+
+        // Program format (default) should have imports and exports
+        assert!(result.code.contains("import {"));
+        assert!(result.code.contains("export default function MDXContent"));
     }
 }

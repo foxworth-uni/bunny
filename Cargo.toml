@@ -3,15 +3,14 @@ resolver = "2"
 members = [
     "crates/bunny-mdx",
     "crates/bunny",
-    "crates/bunny-mdx-node",
     "crates/bunny-wasm",
 ]
 
 [workspace.package]
 version = "0.1.0"
 authors = ["Bunny Contributors"]
-edition = "2021"
-rust-version = "1.77"
+edition = "2024"
+rust-version = "1.85.0"
 license = "MIT"
 repository = "https://github.com/nine-gen/bunny"
 homepage = "https://bunny.dev"
@@ -67,10 +66,6 @@ tempfile = "3.23.0"
 # Base tokio with no features - individual crates opt-in to what they need
 tokio = { version = "1.47.1", default-features = false }
 
-# NAPI bindings for Node.js
-napi = "3.5.2"
-napi-derive = "3.3.3"
-
 # WASM compatibility
 uuid = { version = "1.18", features = ["v4", "js", "fast-rng"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
@@ -84,9 +79,6 @@ rolldown_error = { git = "https://github.com/rolldown/rolldown", tag = "v1.0.0-b
 # Async utilities
 async-trait = "0.1"
 
-# NAPI build
-napi-build = "2.3.0"
-
 # WASM ecosystem
 wasm-bindgen = "0.2.95"
 serde-wasm-bindgen = "0.6"
@@ -96,10 +88,11 @@ wee_alloc = "0.4.5"
 wasm-bindgen-test = "0.3.42"
 
 [profile.release]
-opt-level = 3
-lto = "thin"
-codegen-units = 1
-strip = true
+opt-level = "z"    # Optimize for size (important for WASM)
+lto = "fat"        # Full link-time optimization for WASM
+codegen-units = 1  # Better optimization
+strip = true       # Remove debug symbols
+panic = "abort"    # Smaller panic handler for WASM
 
 [profile.dev]
 opt-level = 1

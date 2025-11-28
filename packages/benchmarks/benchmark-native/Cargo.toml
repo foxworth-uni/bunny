@@ -1,0 +1,15 @@
+[package]
+name = "bunny-benchmark-native"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+
+[[bin]]
+name = "bunny-benchmark"
+path = "src/main.rs"
+
+[dependencies]
+bunny-mdx = { path = "../../../crates/bunny-mdx" }
+serde_json = "1.0"
+

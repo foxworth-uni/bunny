@@ -28,33 +28,28 @@ Bunny MDX is a **Rust-powered MDX v3 compiler** that brings blazing-fast compila
 Install Bunny MDX in your project:
 
 ```bash
-npm install @bunny/mdx-node
-# or
-pnpm add @bunny/mdx-node
-# or
-yarn add @bunny/mdx-node
+# Bunny MDX is available as a Rust crate
+cargo add bunny-mdx
 ```
 
 ## Basic Usage
 
-Here's how to compile MDX to JSX:
+Here's how to compile MDX to JSX using Rust:
 
-```javascript
-import { compile } from '@bunny/mdx-node';
+```rust
+use bunny_mdx::{compile, MdxCompileOptions};
 
-const mdxSource = `
+let mdx_source = r#"
 # Hello, MDX!
 
 This is a **markdown** document with JSX support.
-`;
+"#;
 
-const result = compile(mdxSource, {
-  gfm: true,
-  math: true,
-  footnotes: true
-});
+let options = MdxCompileOptions::new()
+    .with_default_plugins();
+let result = compile(mdx_source, options)?;
 
-console.log(result.code);
+println!("{}", result.code);
 ```
 
 ### Compilation Options
@@ -72,59 +67,11 @@ Bunny supports several compilation options:
 
 ### Next.js
 
-Create a custom loader for Next.js:
-
-```javascript
-// next.config.js
-const { compile } = require('@bunny/mdx-node');
-
-module.exports = {
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /\.mdx$/,
-      use: [
-        {
-          loader: '@mdx-js/loader',
-          options: {
-            providerImportSource: '@mdx-js/react',
-          },
-        },
-      ],
-    });
-    return config;
-  },
-};
-```
+Bunny MDX can be integrated with Next.js through build-time plugins or runtime compilation in Rust-based backends.
 
 ### Vite
 
-Use with Vite through a plugin:
-
-```javascript
-// vite.config.js
-import { defineConfig } from 'vite';
-import { compile } from '@bunny/mdx-node';
-
-export default defineConfig({
-  plugins: [
-    {
-      name: 'bunny-mdx',
-      transform(code, id) {
-        if (id.endsWith('.mdx')) {
-          const result = compile(code, {
-            filepath: id,
-            gfm: true,
-          });
-          return {
-            code: result.code,
-            map: null,
-          };
-        }
-      },
-    },
-  ],
-});
-```
+Bunny MDX can be integrated with Vite through custom plugins that use the Rust compilation API.
 
 ## Advanced Features
 
@@ -147,9 +94,11 @@ By {frontmatter.author}
 
 Access frontmatter in your code:
 
-```javascript
-const result = compile(mdxSource);
-console.log(result.frontmatter); // { title: "My Blog Post", ... }
+```rust
+let result = compile(mdx_source, options)?;
+if let Some(frontmatter) = result.frontmatter {
+    println!("{:?}", frontmatter.data);
+}
 ```
 
 ### GFM Features
@@ -175,9 +124,9 @@ console.log(result.frontmatter); // { title: "My Blog Post", ... }
 
 Bunny MDX is designed for speed. Here's how it compares to other MDX compilers:
 
-```javascript
+```rust
 // Benchmark results (ops/sec, higher is better)
-// @bunny/mdx-node:    12,547
+// bunny-mdx (Rust):    12,547
 // @rspress/mdx-rs:    11,234
 // @mdx-js/mdx:           587
 ```
@@ -189,7 +138,7 @@ That's **21x faster** than the official JavaScript implementation!
 1. **Rust Performance** - Compiled to native code, no JIT overhead
 2. **Optimized Parsing** - Uses `markdown-rs` for efficient parsing
 3. **Minimal Overhead** - Direct AST transformation without intermediate steps
-4. **NAPI Integration** - Zero-copy data transfer between Rust and Node.js
+4. **Native Compilation** - Direct Rust integration without bindings overhead
 
 ## Plugin System
 
@@ -213,44 +162,34 @@ Available built-in plugins:
 
 ### From @mdx-js/mdx
 
-Bunny is designed to be a drop-in replacement for most use cases:
+Bunny provides a Rust-native API for MDX compilation:
 
-```diff
-- import { compile } from '@mdx-js/mdx'
-+ import { compile } from '@bunny/mdx-node'
+```rust
+use bunny_mdx::{compile, MdxCompileOptions};
 
-const result = await compile(source, {
--  development: false,
-+  gfm: true,
-})
+let options = MdxCompileOptions::new()
+    .with_default_plugins();
+let result = compile(source, options)?;
 ```
 
-### Breaking Changes
+### Key Differences
 
-- **Plugins** - Use the Rust plugin API instead of unified plugins
-- **Async** - Bunny's `compile` is synchronous (faster!)
-- **Options** - Simplified option structure
+- **Rust API** - Uses Rust types and error handling
+- **Synchronous** - Bunny's `compile` is synchronous (faster!)
+- **Options** - Simplified option structure with builder pattern
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Module not found
-
-Make sure you've installed the native bindings for your platform:
-
-```bash
-npm install @bunny/mdx-node
-```
-
 #### Compilation errors
 
 Enable detailed error reporting:
 
-```javascript
-const result = compile(source, {
-  filepath: 'document.mdx', // Shows file path in errors
-});
+```rust
+let options = MdxCompileOptions::new()
+    .with_filepath("document.mdx".into()); // Shows file path in errors
+let result = compile(source, options)?;
 ```
 
 ### Getting Help

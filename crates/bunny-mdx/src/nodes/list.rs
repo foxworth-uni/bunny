@@ -3,8 +3,8 @@
 use anyhow::Result;
 use markdown::mdast::{List, ListItem};
 
-use crate::codegen::{CodegenContext, JsValue};
 use super::{children_to_jsx, children_to_jsx_array};
+use crate::codegen::{CodegenContext, JsValue};
 
 /// Convert list node to JSX
 pub fn list_to_jsx(list: &List, ctx: &mut CodegenContext) -> Result<Option<JsValue>> {
@@ -18,7 +18,11 @@ pub fn list_to_jsx(list: &List, ctx: &mut CodegenContext) -> Result<Option<JsVal
 }
 
 /// Convert list item node to JSX
-pub fn list_item_to_jsx(item: &ListItem, ctx: &mut CodegenContext, in_list: bool) -> Result<Option<JsValue>> {
+pub fn list_item_to_jsx(
+    item: &ListItem,
+    ctx: &mut CodegenContext,
+    in_list: bool,
+) -> Result<Option<JsValue>> {
     let children_value = children_to_jsx(&item.children, ctx)?;
 
     // Task list item support: render a disabled checkbox when `checked` is present

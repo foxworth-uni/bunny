@@ -7,43 +7,43 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-categories.workspace = true
-keywords.workspace = true
-description = "WebAssembly bindings for bunny-mdx - compile MDX v3 to JSX in the browser"
+description = "WASM bindings for bunny-mdx - compile MDX to JSX in the browser"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+wee_alloc = ["dep:wee_alloc"]
+console_error_panic_hook = ["dep:console_error_panic_hook"]
+
 [dependencies]
-# Core MDX compiler
-bunny-mdx = { path = "../bunny-mdx", version = "0.1.0" }
+# Core Bunny MDX compiler (ONLY dependency - no bundler!)
+bunny-mdx = { path = "../bunny-mdx" }
 
 # WASM bindings
-wasm-bindgen.workspace = true
-serde-wasm-bindgen.workspace = true
+wasm-bindgen = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
 
-# Serialization (workspace dependencies)
-serde.workspace = true
-serde_json.workspace = true
+# Serialization for options and results
+serde = { workspace = true }
+serde_json = { workspace = true }  # Used for frontmatter data
 
-# JavaScript interop
-js-sys.workspace = true
-
-# Console logging and panic hooks for debugging
-console_error_panic_hook = { workspace = true, optional = true }
+# Optional features
 wee_alloc = { workspace = true, optional = true }
+console_error_panic_hook = { workspace = true, optional = true }
 
 [dev-dependencies]
-wasm-bindgen-test.workspace = true
+wasm-bindgen-test = { workspace = true }
 
-[features]
-# Enable wee_alloc for smaller binary size (trades speed for size)
-default = ["console_error_panic_hook"]
-small = ["wee_alloc"]
+[package.metadata.wasm-pack.profile.release]
+# wasm-opt optimizations for production builds
+wasm-opt = [
+    "-Oz",                                  # Aggressive size optimization
+    "--enable-bulk-memory",                 # Enable bulk memory operations
+    "--enable-nontrapping-float-to-int",    # Enable non-trapping conversions
+    "--enable-sign-ext",                    # Enable sign extension
+    "--enable-mutable-globals",             # Enable mutable globals
+]
 
-[profile.release]
-# Optimize for size - critical for WASM bundles
-opt-level = "z"  # Optimize for size
-lto = true        # Link-time optimization
-codegen-units = 1 # Better optimization
-strip = true      # Strip symbols

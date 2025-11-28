@@ -1,0 +1,19 @@
+# WASM-specific build configuration
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+    # Enable bulk memory operations (faster memcpy/memset)
+    "-C", "target-feature=+bulk-memory",
+
+    # Enable non-trapping float-to-int conversions (better performance)
+    "-C", "target-feature=+nontrapping-fptoint",
+
+    # Enable sign extension operations
+    "-C", "target-feature=+sign-ext",
+
+    # Enable mutable globals (used by some WASM features)
+    "-C", "target-feature=+mutable-globals",
+
+    # Use abort instead of unwinding for panics (smaller binary)
+    "-C", "panic=abort",
+]

@@ -1,0 +1,21 @@
+{
+  "name": "bunny-wasm",
+  "collaborators": [
+    "Bunny Contributors"
+  ],
+  "description": "WASM bindings for bunny-mdx - compile MDX to JSX in the browser",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nine-gen/bunny"
+  },
+  "files": [
+    "bunny_wasm_bg.wasm",
+    "bunny_wasm.js",
+    "bunny_wasm.d.ts"
+  ],
+  "main": "bunny_wasm.js",
+  "homepage": "https://bunny.dev",
+  "types": "bunny_wasm.d.ts"
+}

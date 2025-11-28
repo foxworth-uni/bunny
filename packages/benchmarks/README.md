@@ -6,7 +6,6 @@ Performance benchmarks for Bunny MDX implementations.
 
 This package contains comprehensive benchmarks comparing the performance of different MDX compilation implementations:
 
-- **@bunny/mdx-node** - Bunny's Rust-based MDX compiler (via NAPI)
 - **@mdx-js/mdx** - Official JavaScript MDX compiler
 - **@rspress/mdx-rs** - Rspress's Rust-based MDX compiler (via NAPI)
 

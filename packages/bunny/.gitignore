@@ -1,6 +1,0 @@
-node_modules
-dist/*.js
-dist/*.d.ts
-dist/*.map
-!dist/bunny_wasm*
-!dist/.gitignore

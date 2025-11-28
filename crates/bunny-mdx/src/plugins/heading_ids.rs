@@ -638,7 +638,7 @@ _jsx(_components.h3, {...props, children: "Documentation 文档"});
         // Add exactly the right amount to put an emoji at the boundary
         let padding = "a".repeat(80);
         jsx.push_str(&padding);
-        jsx.push_str("🔥"); // 4-byte emoji
+        jsx.push('🔥'); // 4-byte emoji
         jsx.push_str(r#""});"#);
 
         let result = plugin.transform_jsx(&mut jsx);

@@ -3,8 +3,8 @@
 use anyhow::Result;
 use markdown::mdast::{MdxJsxFlowElement, MdxJsxTextElement, Node};
 
-use crate::codegen::{escape_js_string, CodegenContext, JsValue};
 use super::children_to_jsx;
+use crate::codegen::{escape_js_string, CodegenContext, JsValue};
 
 /// Check if component name should use _components map
 fn should_use_components_map(name: &str) -> bool {
@@ -80,10 +80,22 @@ fn jsx_element_to_string(
         .as_ref()
         .map(|n| {
             // Check if this component was imported directly
-            if ctx.imported_components.contains(n) {
+            let is_imported = ctx.imported_components.contains(n);
+            let uses_component_map = should_use_components_map(n);
+
+            // Debug logging to diagnose MDX component resolution
+            tracing::debug!(
+                component_name = n,
+                is_imported = is_imported,
+                uses_component_map = uses_component_map,
+                all_imported = ?ctx.imported_components,
+                "Resolving JSX component reference"
+            );
+
+            if is_imported {
                 // Use the imported component directly (e.g., Button)
                 n.clone()
-            } else if should_use_components_map(n) {
+            } else if uses_component_map {
                 // Use _components map for provider-injected components
                 // No fallback - if component not provided, let React handle undefined
                 // This avoids creating invalid HTML tags like <CustomAlert>

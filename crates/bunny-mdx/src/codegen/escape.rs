@@ -115,7 +115,6 @@ pub fn is_valid_identifier(name: &str) -> bool {
     chars.all(|c| c.is_alphanumeric() || c == '$' || c == '_')
 }
 
-
 #[cfg(test)]
 mod escape_tests {
     use super::*;
@@ -193,5 +192,4 @@ mod identifier_tests {
         assert!(!is_valid_identifier("return")); // Reserved word
         assert!(!is_valid_identifier("class")); // Reserved word
     }
-
 }

@@ -1,10 +1,13 @@
 //! Inline node conversions (emphasis, strong, links, images, etc.)
 
 use anyhow::Result;
-use markdown::mdast::{Delete, Emphasis, FootnoteDefinition, FootnoteReference, Image, InlineCode, Link, Math, InlineMath, Strong};
+use markdown::mdast::{
+    Delete, Emphasis, FootnoteDefinition, FootnoteReference, Image, InlineCode, InlineMath, Link,
+    Math, Strong,
+};
 
-use crate::codegen::{escape_js_string, CodegenContext, JsValue};
 use super::children_to_jsx;
+use crate::codegen::{escape_js_string, CodegenContext, JsValue};
 
 /// Convert inline code node to JSX
 pub fn inline_code_to_jsx(code: &InlineCode, _ctx: &mut CodegenContext) -> Result<Option<JsValue>> {
@@ -81,7 +84,10 @@ pub fn delete_to_jsx(del: &Delete, ctx: &mut CodegenContext) -> Result<Option<Js
 }
 
 /// Convert footnote reference to JSX
-pub fn footnote_reference_to_jsx(footnote_ref: &FootnoteReference, _ctx: &mut CodegenContext) -> Result<Option<JsValue>> {
+pub fn footnote_reference_to_jsx(
+    footnote_ref: &FootnoteReference,
+    _ctx: &mut CodegenContext,
+) -> Result<Option<JsValue>> {
     let id = &footnote_ref.identifier;
     let label = footnote_ref.label.as_deref().unwrap_or(id);
     let jsx = format!(
@@ -92,7 +98,10 @@ pub fn footnote_reference_to_jsx(footnote_ref: &FootnoteReference, _ctx: &mut Co
 }
 
 /// Convert footnote definition to JSX
-pub fn footnote_definition_to_jsx(footnote_def: &FootnoteDefinition, ctx: &mut CodegenContext) -> Result<Option<JsValue>> {
+pub fn footnote_definition_to_jsx(
+    footnote_def: &FootnoteDefinition,
+    ctx: &mut CodegenContext,
+) -> Result<Option<JsValue>> {
     let id = &footnote_def.identifier;
     let label = footnote_def.label.as_deref().unwrap_or(id);
     let children = children_to_jsx(&footnote_def.children, ctx)?;
@@ -114,7 +123,10 @@ pub fn math_to_jsx(math: &Math, _ctx: &mut CodegenContext) -> Result<Option<JsVa
 }
 
 /// Convert inline math node to JSX
-pub fn inline_math_to_jsx(inline_math: &InlineMath, _ctx: &mut CodegenContext) -> Result<Option<JsValue>> {
+pub fn inline_math_to_jsx(
+    inline_math: &InlineMath,
+    _ctx: &mut CodegenContext,
+) -> Result<Option<JsValue>> {
     let value = escape_js_string(&inline_math.value);
     let jsx = format!(
         "_jsx(_components.span, {{...props, className: \"math math-inline\", children: \"{}\"}})",

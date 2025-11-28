@@ -47,7 +47,6 @@ impl JsValue {
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -84,5 +83,4 @@ mod jsvalue_tests {
         let value = JsValue::text(text);
         assert_eq!(value.to_js(), "\"already\\\\nescaped\"");
     }
-
 }

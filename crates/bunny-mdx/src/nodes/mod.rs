@@ -75,8 +75,12 @@ pub fn node_to_jsx(
         Node::InlineMath(inline_math) => inline::inline_math_to_jsx(inline_math, ctx),
 
         // Footnotes
-        Node::FootnoteReference(footnote_ref) => inline::footnote_reference_to_jsx(footnote_ref, ctx),
-        Node::FootnoteDefinition(footnote_def) => inline::footnote_definition_to_jsx(footnote_def, ctx),
+        Node::FootnoteReference(footnote_ref) => {
+            inline::footnote_reference_to_jsx(footnote_ref, ctx)
+        }
+        Node::FootnoteDefinition(footnote_def) => {
+            inline::footnote_definition_to_jsx(footnote_def, ctx)
+        }
 
         // HTML (pass through if safe)
         Node::Html(html) => Ok(Some(JsValue::raw(html.value.clone()))),

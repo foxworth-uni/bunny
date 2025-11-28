@@ -3,8 +3,8 @@
 use anyhow::Result;
 use markdown::mdast::{AlignKind, Table, TableCell, TableRow};
 
-use crate::codegen::{CodegenContext, JsValue};
 use super::{children_to_jsx, children_to_jsx_array};
+use crate::codegen::{CodegenContext, JsValue};
 
 /// Convert table node to JSX
 pub fn table_to_jsx(table: &Table, ctx: &mut CodegenContext) -> Result<Option<JsValue>> {

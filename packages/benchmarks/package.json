@@ -9,12 +9,13 @@
     "benchmark:simple": "node --expose-gc benchmark.js simple",
     "benchmark:complex": "node --expose-gc benchmark.js complex",
     "benchmark:large": "node --expose-gc benchmark.js large",
-    "benchmark:realworld": "node --expose-gc benchmark.js realworld"
+    "benchmark:realworld": "node --expose-gc benchmark.js realworld",
+    "benchmark:nextjs": "node --expose-gc benchmark.js nextjs-batch"
   },
   "dependencies": {
-    "@bunny/mdx-node": "workspace:*",
     "@mdx-js/mdx": "^3.1.1",
     "@rspress/mdx-rs": "^0.6.6",
+    "bunny-wasm": "workspace:*",
     "tinybench": "^5.1.0",
     "chalk": "^5.3.0",
     "cli-table3": "^0.6.5",
