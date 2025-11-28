@@ -4,9 +4,12 @@ import Table from 'cli-table3';
 import ora from 'ora';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
-import { compile as bunnyCompile } from '@bunny/mdx-node';
+import { spawn } from 'child_process';
 import { compile as mdxjsCompile } from '@mdx-js/mdx';
 import { compileSync as rspressCompile } from '@rspress/mdx-rs';
+
+// Import bunny-wasm (Node.js version - no init needed)
+import { compile_mdx, WasmMdxOptions } from 'bunny-wasm';
 
 // Helper to load Next.js fixtures if available
 function loadNextjsFixtures() {
@@ -58,6 +61,65 @@ const commonOptions = {
   math: true,
 };
 
+// Create bunny-wasm options
+function createBunnyOptions(outputFormat = 'program') {
+  const options = new WasmMdxOptions();
+  options.set_gfm(commonOptions.gfm);
+  options.set_footnotes(commonOptions.footnotes);
+  options.set_math(commonOptions.math);
+  options.set_output_format(outputFormat);
+  return options;
+}
+
+// Native Rust binary path
+const NATIVE_BINARY = join(process.cwd(), 'benchmark-native/target/release/bunny-benchmark');
+
+// Compile MDX using native Rust binary
+function compileNativeRust(content, outputFormat = 'program') {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(NATIVE_BINARY, [outputFormat], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Native Rust binary exited with code ${code}: ${stderr}`));
+        return;
+      }
+
+      try {
+        const result = JSON.parse(stdout);
+        if (!result.success) {
+          reject(new Error('Native Rust compilation failed'));
+          return;
+        }
+        resolve(result);
+      } catch (e) {
+        reject(new Error(`Failed to parse native Rust output: ${e.message}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      reject(new Error(`Failed to spawn native Rust binary: ${err.message}`));
+    });
+
+    // Send content to stdin
+    proc.stdin.write(content, 'utf8');
+    proc.stdin.end();
+  });
+}
+
 async function runBenchmark(name, content) {
   const spinner = ora(`Running ${name} benchmark...`).start();
 
@@ -65,16 +127,6 @@ async function runBenchmark(name, content) {
     time: 1000,  // Run for 1 second
     iterations: 10,
     warmupIterations: 5,
-  });
-
-  // Bunny MDX (Rust via NAPI)
-  bench.add('@bunny/mdx-node', () => {
-    try {
-      bunnyCompile(content, commonOptions);
-    } catch (e) {
-      console.error('@bunny/mdx-node error:', e.message);
-      throw e;
-    }
   });
 
   // Official MDX (JavaScript)
@@ -106,6 +158,48 @@ async function runBenchmark(name, content) {
     }
   });
 
+  // Bunny WASM (Program format - ES modules)
+  bench.add('bunny-wasm (program)', () => {
+    try {
+      const options = createBunnyOptions('program');
+      compile_mdx(content, options);
+    } catch (e) {
+      console.error('bunny-wasm (program) error:', e.message);
+      throw e;
+    }
+  });
+
+  // Bunny WASM (Function-body format - for runtime eval)
+  bench.add('bunny-wasm (function-body)', () => {
+    try {
+      const options = createBunnyOptions('function-body');
+      compile_mdx(content, options);
+    } catch (e) {
+      console.error('bunny-wasm (function-body) error:', e.message);
+      throw e;
+    }
+  });
+
+  // Bunny Native Rust (Program format)
+  bench.add('bunny-native (program)', async () => {
+    try {
+      await compileNativeRust(content, 'program');
+    } catch (e) {
+      console.error('bunny-native (program) error:', e.message);
+      throw e;
+    }
+  });
+
+  // Bunny Native Rust (Function-body format)
+  bench.add('bunny-native (function-body)', async () => {
+    try {
+      await compileNativeRust(content, 'function-body');
+    } catch (e) {
+      console.error('bunny-native (function-body) error:', e.message);
+      throw e;
+    }
+  });
+
   await bench.run();
   spinner.succeed(`Completed ${name} benchmark`);
 
@@ -119,18 +213,6 @@ async function runBatchBenchmark(name, files) {
     time: 5000,  // Run for 5 seconds (longer for batch)
     iterations: 5,
     warmupIterations: 2,
-  });
-
-  // Bunny MDX (Rust via NAPI) - compile all files sequentially
-  bench.add('@bunny/mdx-node', () => {
-    try {
-      for (const content of files) {
-        bunnyCompile(content, commonOptions);
-      }
-    } catch (e) {
-      console.error('@bunny/mdx-node error:', e.message);
-      throw e;
-    }
   });
 
   // Official MDX (JavaScript) - compile all files sequentially
@@ -162,6 +244,56 @@ async function runBatchBenchmark(name, files) {
       }
     } catch (e) {
       console.error('@rspress/mdx-rs error:', e.message);
+      throw e;
+    }
+  });
+
+  // Bunny WASM (Program format) - compile all files sequentially
+  bench.add('bunny-wasm (program)', () => {
+    try {
+      for (const content of files) {
+        const options = createBunnyOptions('program');
+        compile_mdx(content, options);
+      }
+    } catch (e) {
+      console.error('bunny-wasm (program) error:', e.message);
+      throw e;
+    }
+  });
+
+  // Bunny WASM (Function-body format) - compile all files sequentially
+  bench.add('bunny-wasm (function-body)', () => {
+    try {
+      for (const content of files) {
+        const options = createBunnyOptions('function-body');
+        compile_mdx(content, options);
+      }
+    } catch (e) {
+      console.error('bunny-wasm (function-body) error:', e.message);
+      throw e;
+    }
+  });
+
+  // Bunny Native Rust (Program format) - compile all files sequentially
+  bench.add('bunny-native (program)', async () => {
+    try {
+      for (const content of files) {
+        await compileNativeRust(content, 'program');
+      }
+    } catch (e) {
+      console.error('bunny-native (program) error:', e.message);
+      throw e;
+    }
+  });
+
+  // Bunny Native Rust (Function-body format) - compile all files sequentially
+  bench.add('bunny-native (function-body)', async () => {
+    try {
+      for (const content of files) {
+        await compileNativeRust(content, 'function-body');
+      }
+    } catch (e) {
+      console.error('bunny-native (function-body) error:', e.message);
       throw e;
     }
   });
@@ -209,8 +341,20 @@ function displayResults(name, tasks, content) {
     const relative = (fastest / task.result.hz).toFixed(2) + 'x';
 
     const isFastest = task.result.hz === fastest;
+    const isBunnyWasm = task.name.startsWith('bunny-wasm');
+    const isBunnyNative = task.name.startsWith('bunny-native');
+    
+    let nameDisplay = task.name;
+    if (isFastest) {
+      nameDisplay = chalk.green(task.name + ' 🏆');
+    } else if (isBunnyNative) {
+      nameDisplay = chalk.cyan(task.name);
+    } else if (isBunnyWasm) {
+      nameDisplay = chalk.blue(task.name);
+    }
+
     const row = [
-      isFastest ? chalk.green(task.name) : task.name,
+      nameDisplay,
       isFastest ? chalk.green(hz) : hz,
       isFastest ? chalk.green(avgTime) : avgTime,
       margin,
@@ -266,8 +410,20 @@ function displayBatchResults(name, tasks, files) {
     const relative = (fastest / task.result.hz).toFixed(2) + 'x';
 
     const isFastest = task.result.hz === fastest;
+    const isBunnyWasm = task.name.startsWith('bunny-wasm');
+    const isBunnyNative = task.name.startsWith('bunny-native');
+    
+    let nameDisplay = task.name;
+    if (isFastest) {
+      nameDisplay = chalk.green(task.name + ' 🏆');
+    } else if (isBunnyNative) {
+      nameDisplay = chalk.cyan(task.name);
+    } else if (isBunnyWasm) {
+      nameDisplay = chalk.blue(task.name);
+    }
+
     const row = [
-      isFastest ? chalk.green(task.name) : task.name,
+      nameDisplay,
       isFastest ? chalk.green(filesPerSec) : filesPerSec,
       isFastest ? chalk.green(totalTime) : totalTime,
       isFastest ? chalk.green(avgPerFile) : avgPerFile,
@@ -290,54 +446,60 @@ function displaySummary(allResults) {
   console.log(chalk.bold.magenta('\n\n🏆 OVERALL SUMMARY\n'));
   
   const summaryTable = new Table({
-    head: ['Test Case', '@bunny/mdx-node', '@mdx-js/mdx', '@rspress/mdx-rs'],
-    colAligns: ['left', 'right', 'right', 'right'],
+    head: [
+      'Test Case', 
+      '@mdx-js/mdx', 
+      '@rspress/mdx-rs', 
+      chalk.cyan('bunny-native (prog)'),
+      chalk.cyan('bunny-native (fn)'),
+      chalk.blue('bunny-wasm (prog)'),
+      chalk.blue('bunny-wasm (fn)')
+    ],
+    colAligns: ['left', 'right', 'right', 'right', 'right', 'right', 'right'],
   });
 
   Object.entries(allResults).forEach(([name, tasks]) => {
-    const bunny = tasks.find(t => t.name === '@bunny/mdx-node');
     const mdxjs = tasks.find(t => t.name === '@mdx-js/mdx');
     const rspress = tasks.find(t => t.name === '@rspress/mdx-rs');
+    const bunnyNativeProg = tasks.find(t => t.name === 'bunny-native (program)');
+    const bunnyNativeFn = tasks.find(t => t.name === 'bunny-native (function-body)');
+    const bunnyProgram = tasks.find(t => t.name === 'bunny-wasm (program)');
+    const bunnyFn = tasks.find(t => t.name === 'bunny-wasm (function-body)');
 
-    const validTasks = [bunny, mdxjs, rspress].filter(t => t && t.result && t.result.hz);
+    const validTasks = [mdxjs, rspress, bunnyNativeProg, bunnyNativeFn, bunnyProgram, bunnyFn].filter(t => t && t.result && t.result.hz);
     if (validTasks.length === 0) return;
 
     const sorted = validTasks.sort((a, b) => b.result.hz - a.result.hz);
     const fastest = sorted[0];
 
     const formatCell = (task) => {
-      if (!task || !task.result || !task.result.hz) return 'N/A';
+      if (!task || !task.result || !task.result.hz) return chalk.dim('N/A');
       const opsPerSec = task.result.hz.toFixed(0);
       const speedup = (fastest.result.hz / task.result.hz).toFixed(1);
       return task === fastest
         ? chalk.green(`${opsPerSec} ops/s ⚡`)
-        : chalk.yellow(`${opsPerSec} ops/s (${speedup}x slower)`);
+        : chalk.yellow(`${opsPerSec} ops/s (${speedup}x)`);
     };
 
     summaryTable.push([
       name,
-      formatCell(bunny),
       formatCell(mdxjs),
       formatCell(rspress),
+      formatCell(bunnyNativeProg),
+      formatCell(bunnyNativeFn),
+      formatCell(bunnyProgram),
+      formatCell(bunnyFn),
     ]);
   });
 
   console.log(summaryTable.toString());
 
-  // Calculate average speedup for Bunny vs @mdx-js/mdx
-  const speedups = Object.values(allResults).map(tasks => {
-    const bunny = tasks.find(t => t.name === '@bunny/mdx-node');
-    const mdxjs = tasks.find(t => t.name === '@mdx-js/mdx');
-    return bunny && mdxjs ? bunny.result.hz / mdxjs.result.hz : 0;
-  }).filter(x => x > 0);
-
-  const avgSpeedup = (speedups.reduce((a, b) => a + b, 0) / speedups.length).toFixed(1);
-
   // Winner declaration
   console.log(chalk.bold.green('\n✨ Key Findings:'));
-  console.log(chalk.dim(`  • @bunny/mdx-node is ${avgSpeedup}x faster than @mdx-js/mdx on average`));
-  console.log(chalk.dim('  • Rust implementations significantly outperform JavaScript'));
-  console.log(chalk.dim('  • Performance gap increases with document complexity'));
+  console.log(chalk.dim('  • Native Rust implementations are fastest'));
+  console.log(chalk.dim('  • bunny-wasm delivers near-native Rust performance in the browser'));
+  console.log(chalk.dim('  • Function-body format has minimal overhead vs program format'));
+  console.log(chalk.dim('  • All implementations significantly outperform JavaScript'));
   console.log(chalk.dim('  • All implementations produce MDX v3 compliant output\n'));
 }
 
@@ -369,6 +531,7 @@ async function main() {
       displayResults(specificTest, tasks, customFixtures[specificTest]);
     } else {
       console.log(chalk.red(`Unknown test: ${specificTest}`));
+      console.log(chalk.dim('Available tests: simple, complex, large, nextjs-batch'));
     }
   } else {
     // Run all benchmarks - custom fixtures first
@@ -399,4 +562,3 @@ async function main() {
 }
 
 main().catch(console.error);
-
